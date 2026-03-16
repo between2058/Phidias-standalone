@@ -3,9 +3,6 @@ import { usePhidiasStore } from '../../store/phidias-store';
 
 function getBackendApi() {
   const backendApi = usePhidiasStore.getState().apiBaseUrl || '';
-  const { hostApp } = usePhidiasStore.getState();
-  console.log(backendApi);
-  console.log(hostApp);
   return backendApi;
 }
 

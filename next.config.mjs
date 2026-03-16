@@ -8,6 +8,20 @@ const nextConfig = {
   // PlayCanvas and its React wrapper are ESM-only packages
   transpilePackages: ['@playcanvas/react', 'playcanvas'],
 
+  // Enable standalone output for optimized docker builds
+  output: 'standalone',
+
+  // Rewrites for standalone mode: map /phidias/* to /api/phidias/*
+  // This allows the frontend to call /phidias/... and hit our API routes
+  async rewrites() {
+    return [
+      {
+        source: '/phidias/:path*',
+        destination: '/api/phidias/:path*',
+      },
+    ];
+  },
+
   webpack: (config) => {
     // Stub physics engine — we don't use PlayCanvas physics
     config.resolve.alias['sync-ammo'] = path.resolve(__dirname, 'src/lib/stubs/sync-ammo.js');

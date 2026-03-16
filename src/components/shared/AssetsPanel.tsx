@@ -776,14 +776,6 @@ function HistoryTab() {
 
 export default function AssetsPanel({ defaultTab = 'assets' }: { defaultTab?: PanelTab }) {
   const hostApp = usePhidiasStore((state) => state.hostApp);
-  const user = usePhidiasStore((state) => state.user);
-  const api = usePhidiasStore((state) => state.apiBaseUrl);
-
-  useEffect(() => {
-    if (hostApp || user || api) {
-      console.log('AssetsPanel - config from store:', { hostApp, user, api });
-    }
-  }, [hostApp, user, api]);
 
   const {
     assets,
