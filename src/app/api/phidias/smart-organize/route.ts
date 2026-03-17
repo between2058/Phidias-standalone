@@ -68,6 +68,11 @@ export async function POST(request: NextRequest) {
 
         const formData = await request.formData();
         const partsJson = formData.get('parts') as string | null;
+        const spatialHints = formData.get('spatialHints') as string | null;
+        const numberMappingJson = formData.get('numberMapping') as string | null;
+        const originalAnglesJson = formData.get('originalAngles') as string | null;
+        const coloredAnglesJson = formData.get('coloredAngles') as string | null;
+        // Legacy fallback
         const anglesJson = formData.get('angles') as string | null;
 
         if (!partsJson) {
@@ -75,9 +80,16 @@ export async function POST(request: NextRequest) {
         }
 
         const parts: { id: string; color: string }[] = JSON.parse(partsJson);
-        const angleLabels: string[] = anglesJson ? JSON.parse(anglesJson) : [];
+        const originalAngles: string[] = originalAnglesJson
+            ? JSON.parse(originalAnglesJson)
+            : (anglesJson ? JSON.parse(anglesJson) : []);
+        const coloredAngles: string[] = coloredAnglesJson
+            ? JSON.parse(coloredAnglesJson)
+            : originalAngles;
+        const numberMapping: Record<string, string> | undefined = numberMappingJson
+            ? JSON.parse(numberMappingJson)
+            : undefined;
 
-        // Collect multi-view images
         const originalFiles = formData.getAll('original') as File[];
         const coloredFiles = formData.getAll('colored') as File[];
 
@@ -88,82 +100,75 @@ export async function POST(request: NextRequest) {
         const originalImages = await Promise.all(originalFiles.map(fileToBase64));
         const coloredImages = await Promise.all(coloredFiles.map(fileToBase64));
 
-        // Build color legend
-        const colorLegend = parts.map(p => {
-            const readableName = hexToReadableName(p.color);
-            return `  - "${p.id}" → ${readableName} (${p.color})`;
-        }).join('\n');
+        // ── Stage 1: Structure Recognition ──────────────────────────────
+        console.log(`[smart-organize] Starting Stage 1...`);
+        const stage1 = await runStage1(originalImages, originalAngles);
 
-        // Build angle descriptions
-        const angleDesc = angleLabels.length > 0
-            ? `from ${angleLabels.length} different viewing angles: ${angleLabels.join(', ')}`
-            : 'from multiple viewing angles';
-
+        // ── Stage 2: Naming & Grouping ──────────────────────────────────
         const system = [
-            'You are a 3D model part analyst. You receive multi-angle screenshots of a 3D model in two modes:',
-            '1. ORIGINAL TEXTURE — showing the real materials and textures of the model',
-            '2. COLOR-CODED — where each segmented part is rendered in a distinct flat color',
-            '',
-            'Your task: cross-reference the two sets of images to identify what each colored part represents,',
-            'then name and group the parts based on the real-world object you see in the original texture images.',
-            '',
+            'You are a 3D model part analyst. You receive multi-angle screenshots of a 3D model.',
+            'The model has been identified and its structure is provided.',
+            'Your task: name each numbered part and group them based on their function.',
             'You MUST return ONLY a valid JSON array. No markdown, no explanation, no extra text.',
         ].join('\n');
 
+        // Build number mapping legend for prompt
+        const mappingLegend = numberMapping
+            ? Object.entries(numberMapping).map(([num, id]) => `#${num} → "${id}"`).join('\n')
+            : parts.map((p, i) => `#${i + 1} → "${p.id}"`).join('\n');
+
+        const regionsText = stage1.regions.length > 0
+            ? stage1.regions.join(', ')
+            : 'not identified';
+
         const user = [
-            `This 3D model has ${parts.length} segmented parts, shown ${angleDesc}.`,
+            `This 3D model is a "${stage1.object}" with these structural regions: ${regionsText}.`,
             '',
-            'The FIRST set of images shows the ORIGINAL TEXTURES — use these to understand WHAT the object is',
-            'and what each region looks like (material, shape, function).',
+            'Below are multi-angle screenshots:',
+            '- ORIGINAL TEXTURE views: understand materials and function',
+            '- NUMBERED COLOR-CODED views: each part has a number label on it',
             '',
-            'The SECOND set of images shows the same model with COLOR-CODED PARTS — each part is a flat color.',
-            'Use these to understand WHERE each part is and match colors to part IDs.',
+            'Part mapping (number → ID):',
+            mappingLegend,
             '',
-            'Color legend (part ID → color in the coded images):',
-            colorLegend,
-            '',
+            ...(spatialHints ? [
+                'Spatial hints (position within model):',
+                spatialHints,
+                '',
+            ] : []),
             'Instructions:',
-            '1. First, identify what the overall 3D object is (e.g. a chair, a car, a character).',
-            '2. Look at the original texture images to understand each region\'s real-world function.',
-            '3. Look at the color-coded images to identify which colored region corresponds to which part ID.',
-            '4. Cross-reference: match each color-coded region to its real-world name from the texture views.',
-            '5. Group related parts (e.g. all legs → "Legs", body panels → "Body").',
-            '',
-            'Output — return ONLY this JSON array:',
-            `[{"id":"${parts[0]?.id ?? 'part_0'}","name":"<descriptive name>","group":"<group name>"},...]`,
+            '1. Match each numbered part to the structural regions listed above.',
+            '2. Name each part based on its real-world function (2-4 words).',
+            '3. Group parts using the structural regions as group names.',
+            '   You may split or merge regions if the parts don\'t fit well.',
+            '4. Return ONLY a JSON array: [{"id":"part_abc", "name":"...", "group":"..."}, ...]',
             '',
             'Rules:',
+            '- Use the part ID (not the number) in the "id" field',
             '- Use short, descriptive English names (2-4 words max)',
-            '- Group names: broad categories (e.g. "Legs", "Body", "Head", "Base", "Accessories")',
-            '- Same-type parts MUST share a group (e.g. 4 legs → "Legs")',
-            '- Symmetric parts share a group (e.g. "Left Arm" + "Right Arm" → "Arms")',
+            '- Same-type parts MUST share a group',
+            '- Symmetric parts share a group',
             `- Include ALL ${parts.length} parts — do not skip any`,
-            '- Use multiple viewing angles to identify parts that may be hidden from one view',
             '- Return ONLY the JSON array',
         ].join('\n');
 
-        console.log(`[smart-organize] VLM config — URL: ${VLM_API_URL}, model: ${VLM_MODEL}, isAnthropic: ${isAnthropic()}`);
-        console.log(`[smart-organize] Input — ${parts.length} parts, ${originalImages.length} original imgs, ${coloredImages.length} colored imgs, angles: [${angleLabels.join(', ')}]`);
-        console.log(`[smart-organize] Image sizes — original: [${originalImages.map(i => `${(i.base64.length / 1024).toFixed(0)}KB`).join(', ')}], colored: [${coloredImages.map(i => `${(i.base64.length / 1024).toFixed(0)}KB`).join(', ')}]`);
+        console.log(`[smart-organize] Starting Stage 2 — ${parts.length} parts, object="${stage1.object}"`);
 
-        // Try up to 2 times
         let lastError: Error | null = null;
         for (let attempt = 0; attempt < 2; attempt++) {
             try {
-                console.log(`[smart-organize] attempt ${attempt + 1} — calling VLM...`);
+                console.log(`[smart-organize:stage2] attempt ${attempt + 1} — calling VLM...`);
                 const raw = isAnthropic()
-                    ? await callAnthropic(originalImages, coloredImages, angleLabels, angleLabels, system, user)
-                    : await callOpenAICompat(originalImages, coloredImages, angleLabels, angleLabels, system, user);
+                    ? await callAnthropic(originalImages, coloredImages, originalAngles, coloredAngles, system, user)
+                    : await callOpenAICompat(originalImages, coloredImages, originalAngles, coloredAngles, system, user);
 
-                console.log(`[smart-organize] attempt ${attempt + 1} — raw response (${raw.length} chars):`);
-                console.log(`[smart-organize] >>>START>>>\n${raw}\n<<<END<<<`);
-
-                const result = extractAndValidate(raw, parts);
+                console.log(`[smart-organize:stage2] attempt ${attempt + 1} — raw response (${raw.length} chars)`);
+                const result = extractAndValidate(raw, parts, numberMapping);
                 console.log(`[smart-organize] SUCCESS — ${result.length} parts returned`);
                 return NextResponse.json({ parts: result });
             } catch (err: any) {
                 lastError = err;
-                console.warn(`[smart-organize] attempt ${attempt + 1} failed:`, err.message);
+                console.warn(`[smart-organize:stage2] attempt ${attempt + 1} failed:`, err.message);
             }
         }
 
@@ -182,6 +187,7 @@ export async function POST(request: NextRequest) {
 function extractAndValidate(
     rawText: string,
     inputParts: { id: string; color: string }[],
+    numberMapping?: Record<string, string>,  // "1" → "part_abc" (JSON keys are always strings)
 ): { id: string; name: string; group: string }[] {
     const parsed = extractJson(rawText);
 
@@ -194,9 +200,16 @@ function extractAndValidate(
 
     for (const item of parsed) {
         if (!item || typeof item !== 'object') continue;
-        const id = String(item.id ?? '');
+        let id = String(item.id ?? '');
         const name = String(item.name ?? '').trim();
         const group = String(item.group ?? '').trim();
+
+        // Resolve numeric ID via number mapping (VLM may return "1" instead of "part_abc")
+        if (id && !inputIds.has(id) && numberMapping) {
+            const resolved = numberMapping[id];
+            if (resolved) id = resolved;
+        }
+
         if (id && inputIds.has(id) && name) {
             resultMap.set(id, { name, group: group || 'Ungrouped' });
         }
@@ -204,12 +217,12 @@ function extractAndValidate(
 
     // Fill in missing parts with fallback names
     const result: { id: string; name: string; group: string }[] = [];
-    for (const p of inputParts) {
+    for (let idx = 0; idx < inputParts.length; idx++) {
+        const p = inputParts[idx];
         const match = resultMap.get(p.id);
         if (match) {
             result.push({ id: p.id, ...match });
         } else {
-            const idx = inputParts.indexOf(p);
             const colorName = hexToReadableName(p.color);
             result.push({
                 id: p.id,
