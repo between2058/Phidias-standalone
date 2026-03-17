@@ -133,7 +133,7 @@ interface SegmentAIPanelProps {
   onStart: (params: P3SAMParams) => void;
   onCancel: () => void;
   onSmartOrganize?: () => void;
-  isOrganizing?: boolean;
+  isOrganizing?: null | 'analyzing' | 'organizing';
 }
 
 export default function SegmentAIPanel({
@@ -409,22 +409,22 @@ export default function SegmentAIPanel({
         >
           <button
             onClick={onSmartOrganize}
-            disabled={isOrganizing}
+            disabled={!!isOrganizing}
             className={cn(
               'w-full py-2.5 rounded-xl text-sm font-bold transition-opacity hover:opacity-90',
-              isOrganizing ? 'cursor-not-allowed opacity-60' : 'cursor-pointer',
+              !!isOrganizing ? 'cursor-not-allowed opacity-60' : 'cursor-pointer',
             )}
             style={{
-              background: isOrganizing
+              background: !!isOrganizing
                 ? '#252542'
                 : 'linear-gradient(135deg, #7c3aed, #D5B451)',
-              color: isOrganizing ? '#64748b' : '#fff',
+              color: !!isOrganizing ? '#64748b' : '#fff',
             }}
           >
             {isOrganizing ? (
               <span className="flex items-center justify-center gap-2">
                 <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                Organizing...
+                {isOrganizing === 'analyzing' ? 'Analyzing structure...' : 'Organizing parts...'}
               </span>
             ) : (
               'Smart Organize'
