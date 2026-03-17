@@ -133,12 +133,6 @@ function detectMergedAndGroupNodes(
   return { mergedParts, groupParts, claimedMeshIds };
 }
 
-function buildSegmentColors(parts: Part[]): Record<string, string> {
-  const colors: Record<string, string> = {};
-  parts.forEach(p => p.meshIds.forEach(mid => { colors[mid] = p.color; }));
-  return colors;
-}
-
 function buildMeshToPartId(parts: Part[]): Record<string, string> {
   const map: Record<string, string> = {};
   parts.forEach(p => p.meshIds.forEach(mid => { map[mid] = p.id; }));

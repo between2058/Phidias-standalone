@@ -507,7 +507,7 @@ export async function smartOrganize(
   numberMapping?: Record<number, string>,
   originalAngles?: string[],
   coloredAngles?: string[],
-  settings?: Record<string, unknown>,
+  _settings?: Record<string, unknown>,
 ): Promise<SmartOrganizeResponse> {
   const formData = new FormData();
   formData.append('parts', JSON.stringify(parts));
