@@ -20,17 +20,11 @@ import type { SmartOrganizeResult } from '@/lib/api/phidias';
 import {
   computePartSpatials,
   buildSpatialHintsText,
-  projectToScreen,
-  resolveOverlaps,
-  annotateScreenshot,
+  captureMultiViewScreenshots,
   getColoredAngles,
   buildNumberMapping,
-  renderFromAngle,
-  applySegmentColorMaterials,
   getMeshColors,
   BASE_ANGLES,
-  type PartSpatialInfo,
-  type PartLike,
 } from '@/lib/smart-organize-utils';
 
 const ThreeViewport = dynamic(() => import('@/components/shared/ThreeViewport'), {
@@ -152,70 +146,6 @@ function partsToHierarchyItems(parts: Part[]): HierarchyItem[] {
     const type: HierarchyItem['type'] = p.meshIds.length > 1 ? 'group' : 'mesh';
     return { id: p.id, name: p.name, visible: p.visible, type };
   });
-}
-
-// ─── captureMultiViewScreenshots ─────────────────────────────────────────────
-
-/**
- * Capture multi-angle screenshots in both original and colored modes.
- * Returns { original: Blob[], colored: Blob[] } — originals use BASE_ANGLES, colored use BASE_ANGLES.
- */
-async function captureMultiViewScreenshots(
-  group: THREE.Group,
-  parts: PartLike[],
-  coloredAngles: [number, number, string][],
-  spatials?: PartSpatialInfo[],
-): Promise<{ original: Blob[]; colored: Blob[] }> {
-  const w = 768, h = 768;
-  const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true, alpha: false });
-  renderer.setSize(w, h);
-  renderer.setPixelRatio(1);
-  renderer.setClearColor(0x1a1a2e, 1);
-
-  const box = new THREE.Box3().setFromObject(group);
-  const center = box.getCenter(new THREE.Vector3());
-  const size = box.getSize(new THREE.Vector3());
-  const maxDim = Math.max(size.x, size.y, size.z) || 1;
-  const dist = maxDim * 1.8;
-
-  const camera = new THREE.PerspectiveCamera(50, 1, 0.01, maxDim * 100);
-
-  const tempScene = new THREE.Scene();
-  tempScene.add(new THREE.AmbientLight(0xffffff, 0.8));
-  const dir = new THREE.DirectionalLight(0xffffff, 1);
-  dir.position.set(1, 2, 1);
-  tempScene.add(dir);
-
-  const savedParent = group.parent;
-  tempScene.add(group);
-
-  // 1. Capture original texture from BASE_ANGLES (always 3)
-  const original: Blob[] = [];
-  for (const [az, el] of BASE_ANGLES) {
-    original.push(await renderFromAngle(renderer, tempScene, camera, group, center, dist, az, el));
-  }
-
-  // 2. Capture color-coded from dynamic angles + annotate with number labels
-  const restoreMaterials = applySegmentColorMaterials(group, parts);
-  const colored: Blob[] = [];
-  for (const [az, el] of coloredAngles) {
-    let blob = await renderFromAngle(renderer, tempScene, camera, group, center, dist, az, el);
-
-    if (spatials && spatials.length > 0) {
-      const labels = projectToScreen(spatials, camera, w, h);
-      resolveOverlaps(labels, w, h);
-      blob = await annotateScreenshot(blob, labels, w, h);
-    }
-
-    colored.push(blob);
-  }
-  restoreMaterials();
-
-  tempScene.remove(group);
-  if (savedParent) savedParent.add(group);
-  renderer.dispose();
-
-  return { original, colored };
 }
 
 // ─── splitSegmentedGlb ────────────────────────────────────────────────────────
