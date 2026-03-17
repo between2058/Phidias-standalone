@@ -152,8 +152,8 @@ export async function POST(request: NextRequest) {
             try {
                 console.log(`[smart-organize] attempt ${attempt + 1} — calling VLM...`);
                 const raw = isAnthropic()
-                    ? await callAnthropic(originalImages, coloredImages, angleLabels, system, user)
-                    : await callOpenAICompat(originalImages, coloredImages, angleLabels, system, user);
+                    ? await callAnthropic(originalImages, coloredImages, angleLabels, angleLabels, system, user)
+                    : await callOpenAICompat(originalImages, coloredImages, angleLabels, angleLabels, system, user);
 
                 console.log(`[smart-organize] attempt ${attempt + 1} — raw response (${raw.length} chars):`);
                 console.log(`[smart-organize] >>>START>>>\n${raw}\n<<<END<<<`);
@@ -258,19 +258,96 @@ function extractJson(text: string): any[] {
     throw new Error('No valid JSON array found in VLM response');
 }
 
+// ── Stage 1: Structure Recognition ──────────────────────────────────────────
+
+interface Stage1Result {
+    object: string;
+    regions: string[];
+}
+
+function extractJsonObject(text: string): Record<string, unknown> {
+    const trimmed = text.trim();
+
+    if (trimmed.startsWith('{')) {
+        try { return JSON.parse(trimmed); } catch { /* continue */ }
+    }
+
+    const fenceMatch = trimmed.match(/```(?:json)?\s*([\s\S]*?)```/);
+    if (fenceMatch) {
+        try { return JSON.parse(fenceMatch[1].trim()); } catch { /* continue */ }
+    }
+
+    let depth = 0, start = -1;
+    for (let i = 0; i < trimmed.length; i++) {
+        if (trimmed[i] === '{') { if (depth === 0) start = i; depth++; }
+        else if (trimmed[i] === '}') {
+            depth--;
+            if (depth === 0 && start >= 0) {
+                try { return JSON.parse(trimmed.slice(start, i + 1)); } catch { /* continue */ }
+            }
+        }
+    }
+
+    throw new Error('No valid JSON object found in VLM response');
+}
+
+function parseStage1Response(raw: string): Stage1Result {
+    try {
+        const obj = extractJsonObject(raw);
+        const object = typeof obj.object === 'string' && obj.object.trim()
+            ? obj.object.trim().slice(0, 100)
+            : 'unknown object';
+        const regions = Array.isArray(obj.regions)
+            ? obj.regions.filter((r): r is string => typeof r === 'string').slice(0, 20)
+            : [];
+        return { object, regions };
+    } catch {
+        return { object: 'unknown object', regions: [] };
+    }
+}
+
+const STAGE1_SYSTEM = [
+    'You are a 3D model analyst. You receive multi-angle screenshots of a 3D model.',
+    'Your task: identify the object type and list its major structural regions.',
+    'You MUST return ONLY a valid JSON object. No markdown, no explanation.',
+].join('\n');
+
+const STAGE1_USER = [
+    'You see multi-angle screenshots of a 3D model. Please:',
+    '1. Identify what this object is (e.g. "office chair", "sports car")',
+    '2. List the major structural regions you can identify (e.g. "base with 5 wheels", "seat cushion", "backrest", "two armrests")',
+    '3. Return ONLY JSON: {"object": "...", "regions": ["...", "..."]}',
+].join('\n');
+
+async function runStage1(originalImages: ImageData[], originalAngles: string[]): Promise<Stage1Result> {
+    try {
+        console.log(`[smart-organize:stage1] calling VLM with ${originalImages.length} images...`);
+        const raw = isAnthropic()
+            ? await callAnthropic(originalImages, [], originalAngles, [], STAGE1_SYSTEM, STAGE1_USER, 512)
+            : await callOpenAICompat(originalImages, [], originalAngles, [], STAGE1_SYSTEM, STAGE1_USER, 512);
+        console.log(`[smart-organize:stage1] raw response: ${raw}`);
+        const result = parseStage1Response(raw);
+        console.log(`[smart-organize:stage1] parsed: object="${result.object}", regions=[${result.regions.join(', ')}]`);
+        return result;
+    } catch (err: any) {
+        console.warn(`[smart-organize:stage1] failed, using defaults:`, err.message);
+        return { object: 'unknown object', regions: [] };
+    }
+}
+
 // ── Build multi-image content blocks ─────────────────────────────────────────
 
 function buildImageContentOpenAI(
     originalImages: ImageData[],
     coloredImages: ImageData[],
-    angleLabels: string[],
+    originalAngles: string[],
+    coloredAngles: string[],
 ): any[] {
     const content: any[] = [];
 
-    // Original texture images first
     content.push({ type: 'text', text: '--- ORIGINAL TEXTURE VIEWS ---' });
     for (let i = 0; i < originalImages.length; i++) {
-        const label = angleLabels[i] ?? `angle ${i + 1}`;
+        const label = originalAngles[i] ?? `angle ${i + 1}`;
         content.push({ type: 'text', text: `[Original — ${label}]` });
         content.push({
             type: 'image_url',
@@ -278,15 +355,16 @@ function buildImageContentOpenAI(
         });
     }
 
-    // Then color-coded images
-    content.push({ type: 'text', text: '--- COLOR-CODED PART VIEWS ---' });
-    for (let i = 0; i < coloredImages.length; i++) {
-        const label = angleLabels[i] ?? `angle ${i + 1}`;
-        content.push({ type: 'text', text: `[Color-coded — ${label}]` });
-        content.push({
-            type: 'image_url',
-            image_url: { url: `data:${coloredImages[i].mime};base64,${coloredImages[i].base64}` },
-        });
+    if (coloredImages.length > 0) {
+        content.push({ type: 'text', text: '--- NUMBERED COLOR-CODED PART VIEWS ---' });
+        for (let i = 0; i < coloredImages.length; i++) {
+            const label = coloredAngles[i] ?? `angle ${i + 1}`;
+            content.push({ type: 'text', text: `[Color-coded — ${label}]` });
+            content.push({
+                type: 'image_url',
+                image_url: { url: `data:${coloredImages[i].mime};base64,${coloredImages[i].base64}` },
+            });
+        }
     }
 
     return content;
@@ -295,13 +373,14 @@ function buildImageContentOpenAI(
 function buildImageContentAnthropic(
     originalImages: ImageData[],
     coloredImages: ImageData[],
-    angleLabels: string[],
+    originalAngles: string[],
+    coloredAngles: string[],
 ): any[] {
     const content: any[] = [];
 
     content.push({ type: 'text', text: '--- ORIGINAL TEXTURE VIEWS ---' });
     for (let i = 0; i < originalImages.length; i++) {
-        const label = angleLabels[i] ?? `angle ${i + 1}`;
+        const label = originalAngles[i] ?? `angle ${i + 1}`;
         content.push({ type: 'text', text: `[Original — ${label}]` });
         content.push({
             type: 'image',
@@ -309,14 +388,16 @@ function buildImageContentAnthropic(
         });
     }
 
-    content.push({ type: 'text', text: '--- COLOR-CODED PART VIEWS ---' });
-    for (let i = 0; i < coloredImages.length; i++) {
-        const label = angleLabels[i] ?? `angle ${i + 1}`;
-        content.push({ type: 'text', text: `[Color-coded — ${label}]` });
-        content.push({
-            type: 'image',
-            source: { type: 'base64', media_type: coloredImages[i].mime, data: coloredImages[i].base64 },
-        });
+    if (coloredImages.length > 0) {
+        content.push({ type: 'text', text: '--- NUMBERED COLOR-CODED PART VIEWS ---' });
+        for (let i = 0; i < coloredImages.length; i++) {
+            const label = coloredAngles[i] ?? `angle ${i + 1}`;
+            content.push({ type: 'text', text: `[Color-coded — ${label}]` });
+            content.push({
+                type: 'image',
+                source: { type: 'base64', media_type: coloredImages[i].mime, data: coloredImages[i].base64 },
+            });
+        }
     }
 
     return content;
@@ -327,14 +408,16 @@ function buildImageContentAnthropic(
 async function callAnthropic(
     originalImages: ImageData[],
     coloredImages: ImageData[],
-    angleLabels: string[],
+    originalAngles: string[],
+    coloredAngles: string[],
     system: string,
     user: string,
+    maxTokens = 16384,
 ): Promise<string> {
     const url = VLM_API_URL.replace(/\/+$/, '');
     const endpoint = url.endsWith('/messages') ? url : `${url}/v1/messages`;
 
-    const imageContent = buildImageContentAnthropic(originalImages, coloredImages, angleLabels);
+    const imageContent = buildImageContentAnthropic(originalImages, coloredImages, originalAngles, coloredAngles);
 
     const res = await fetch(endpoint, {
         method: 'POST',
@@ -345,7 +428,7 @@ async function callAnthropic(
         },
         body: JSON.stringify({
             model: VLM_MODEL,
-            max_tokens: 16384,
+            max_tokens: maxTokens,
             temperature: 0.2,
             system,
             messages: [
@@ -370,16 +453,18 @@ async function callAnthropic(
 async function callOpenAICompat(
     originalImages: ImageData[],
     coloredImages: ImageData[],
-    angleLabels: string[],
+    originalAngles: string[],
+    coloredAngles: string[],
     system: string,
     user: string,
+    maxTokens = 16384,
 ): Promise<string> {
     const url = VLM_API_URL.replace(/\/+$/, '');
     const endpoint = url.endsWith('/chat/completions')
         ? url
         : `${url}/chat/completions`;
 
-    const imageContent = buildImageContentOpenAI(originalImages, coloredImages, angleLabels);
+    const imageContent = buildImageContentOpenAI(originalImages, coloredImages, originalAngles, coloredAngles);
 
     const res = await fetch(endpoint, {
         method: 'POST',
@@ -389,7 +474,7 @@ async function callOpenAICompat(
         },
         body: JSON.stringify({
             model: VLM_MODEL,
-            max_tokens: 16384,
+            max_tokens: maxTokens,
             temperature: 0.2,
             messages: [
                 { role: 'system', content: system },
