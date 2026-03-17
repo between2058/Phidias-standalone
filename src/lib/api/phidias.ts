@@ -503,12 +503,28 @@ export async function smartOrganize(
   originalFiles: (File | Blob)[],
   coloredFiles: (File | Blob)[],
   angleLabels: string[],
+  spatialHints?: string,
+  numberMapping?: Record<number, string>,
+  originalAngles?: string[],
+  coloredAngles?: string[],
   settings?: Record<string, unknown>,
 ): Promise<SmartOrganizeResponse> {
   const formData = new FormData();
   formData.append('parts', JSON.stringify(parts));
   if (angleLabels && angleLabels.length > 0) {
     formData.append('angles', JSON.stringify(angleLabels));
+  }
+  if (originalAngles) {
+    formData.append('originalAngles', JSON.stringify(originalAngles));
+  }
+  if (coloredAngles) {
+    formData.append('coloredAngles', JSON.stringify(coloredAngles));
+  }
+  if (spatialHints) {
+    formData.append('spatialHints', spatialHints);
+  }
+  if (numberMapping) {
+    formData.append('numberMapping', JSON.stringify(numberMapping));
   }
   originalFiles.forEach((file, idx) => {
     formData.append('original', file, `original_${idx}.png`);
