@@ -18,10 +18,18 @@ import { useSegmentStore } from '@/store/segment-store';
 import { segment3D, downloadPhidiasImage, smartOrganize } from '@/lib/api/phidias';
 import type { SmartOrganizeResult } from '@/lib/api/phidias';
 import {
+  computePartSpatials,
+  buildSpatialHintsText,
+  projectToScreen,
+  resolveOverlaps,
+  annotateScreenshot,
+  getColoredAngles,
+  buildNumberMapping,
   renderFromAngle,
   applySegmentColorMaterials,
   getMeshColors,
   BASE_ANGLES,
+  type PartSpatialInfo,
   type PartLike,
 } from '@/lib/smart-organize-utils';
 
@@ -161,6 +169,8 @@ function partsToHierarchyItems(parts: Part[]): HierarchyItem[] {
 async function captureMultiViewScreenshots(
   group: THREE.Group,
   parts: PartLike[],
+  coloredAngles: [number, number, string][],
+  spatials?: PartSpatialInfo[],
 ): Promise<{ original: Blob[]; colored: Blob[] }> {
   const w = 768, h = 768;
   const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true, alpha: false });
@@ -185,21 +195,28 @@ async function captureMultiViewScreenshots(
   const savedParent = group.parent;
   tempScene.add(group);
 
-  // 1. Capture original texture from all angles
+  // 1. Capture original texture from BASE_ANGLES (always 3)
   const original: Blob[] = [];
   for (const [az, el] of BASE_ANGLES) {
     original.push(await renderFromAngle(renderer, tempScene, camera, group, center, dist, az, el));
   }
 
-  // 2. Swap to segment colors and capture from all angles
+  // 2. Capture color-coded from dynamic angles + annotate with number labels
   const restoreMaterials = applySegmentColorMaterials(group, parts);
   const colored: Blob[] = [];
-  for (const [az, el] of BASE_ANGLES) {
-    colored.push(await renderFromAngle(renderer, tempScene, camera, group, center, dist, az, el));
+  for (const [az, el] of coloredAngles) {
+    let blob = await renderFromAngle(renderer, tempScene, camera, group, center, dist, az, el);
+
+    if (spatials && spatials.length > 0) {
+      const labels = projectToScreen(spatials, camera, w, h);
+      resolveOverlaps(labels, w, h);
+      blob = await annotateScreenshot(blob, labels, w, h);
+    }
+
+    colored.push(blob);
   }
   restoreMaterials();
 
-  // Restore parent
   tempScene.remove(group);
   if (savedParent) savedParent.add(group);
   renderer.dispose();
@@ -380,7 +397,8 @@ export default function SegmentPage() {
   const [segmentProgress, setSegmentProgress] = useState(0);
   const [segmentError, setSegmentError] = useState<string | null>(null);
   const [aiResults, setAiResults] = useState<SegmentResult[]>([]);
-  const [isOrganizing, setIsOrganizing] = useState(false);
+  type OrganizeStage = null | 'analyzing' | 'organizing';
+  const [organizeStage, setOrganizeStage] = useState<OrganizeStage>(null);
 
   // ── Selection state ────────────────────────────────────────────────────────
   const [selectedPartIds, setSelectedPartIds] = useState<string[]>([]);
@@ -1053,32 +1071,46 @@ export default function SegmentPage() {
 
   const handleSmartOrganize = useCallback(async () => {
     if (!sceneRef.current || parts.length === 0) return;
-    setIsOrganizing(true);
+    setOrganizeStage('analyzing');
     setSegmentError(null);
 
     try {
-      // 1. Read material colours from the Three.js meshes
+      // 1. Compute spatial info and number mapping
+      const spatials = computePartSpatials(sceneRef.current, parts);
+      const { mapping: numberMapping, emptyParts } = buildNumberMapping(parts);
+      const spatialHintsText = buildSpatialHintsText(spatials, emptyParts);
+
+      // 2. Determine dynamic angles for colored screenshots
+      const coloredAngles = getColoredAngles(parts.length);
+
+      // 3. Capture multi-angle screenshots (original + annotated colored)
+      const { original, colored } = await captureMultiViewScreenshots(
+        sceneRef.current, parts, coloredAngles, spatials,
+      );
+
+      setOrganizeStage('organizing');
+
+      // 4. Call VLM API
       const meshColors = getMeshColors(sceneRef.current);
-
-      // 2. Capture multi-angle screenshots (original + colored)
-      const { original, colored } = await captureMultiViewScreenshots(sceneRef.current, parts);
-
-      // 3. Call VLM API with all images
       const response = await smartOrganize(
         meshColors.map(mc => ({ id: mc.id, color: mc.color })),
         original,
         colored,
-        BASE_ANGLES.map(([, , label]) => label),
+        BASE_ANGLES.map(([,, label]) => label),
+        spatialHintsText,
+        numberMapping,
+        BASE_ANGLES.map(([,, label]) => label),
+        coloredAngles.map(([,, label]) => label),
       );
       const results: SmartOrganizeResult[] = response.parts;
 
-      // 4. Rename parts
+      // 5. Rename parts
       let newParts = parts.map((p) => {
         const match = results.find((r) => r.id === p.id);
         return match ? { ...p, name: match.name } : p;
       });
 
-      // 5. Build groups from VLM suggestions
+      // 6. Build groups from VLM suggestions
       const groupMap = new Map<string, string[]>();
       for (const r of results) {
         if (!r.group) continue;
@@ -1087,7 +1119,7 @@ export default function SegmentPage() {
       }
 
       for (const [groupName, memberIds] of Array.from(groupMap.entries())) {
-        if (memberIds.length < 2) continue; // only group 2+ parts
+        if (memberIds.length < 2) continue;
         const groupId = `group_${groupName.toLowerCase().replace(/\s+/g, '_')}_${Date.now()}`;
         const groupPart: Part = {
           id: groupId,
@@ -1098,18 +1130,16 @@ export default function SegmentPage() {
           isGroup: true,
           childIds: memberIds,
         };
-        // Set parentId on children
         newParts = newParts.map((p) =>
           memberIds.includes(p.id) ? { ...p, parentId: groupId } : p,
         );
-        // Insert group before its first child
         const firstIdx = newParts.findIndex((p) => memberIds.includes(p.id));
         newParts.splice(firstIdx, 0, groupPart);
       }
 
       setParts(newParts);
 
-      // Rebuild Three.js groups to match
+      // 7. Rebuild Three.js groups to match
       if (sceneRef.current) {
         for (const part of newParts) {
           if (!part.isGroup || !part.childIds || part.childIds.length < 2) continue;
@@ -1128,7 +1158,7 @@ export default function SegmentPage() {
     } catch (err) {
       setSegmentError(err instanceof Error ? err.message : 'Smart organize failed');
     } finally {
-      setIsOrganizing(false);
+      setOrganizeStage(null);
     }
   }, [parts, setParts]);
 
@@ -1208,7 +1238,7 @@ export default function SegmentPage() {
             onStart={handleStartSegmentation}
             onCancel={handleCancelSegmentation}
             onSmartOrganize={handleSmartOrganize}
-            isOrganizing={isOrganizing}
+            isOrganizing={organizeStage}
           />
         </div>
       </aside>
