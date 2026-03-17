@@ -17,6 +17,13 @@ import { useWorkspace } from '@/lib/workspace-context';
 import { useSegmentStore } from '@/store/segment-store';
 import { segment3D, downloadPhidiasImage, smartOrganize } from '@/lib/api/phidias';
 import type { SmartOrganizeResult } from '@/lib/api/phidias';
+import {
+  renderFromAngle,
+  applySegmentColorMaterials,
+  getMeshColors,
+  BASE_ANGLES,
+  type PartLike,
+} from '@/lib/smart-organize-utils';
 
 const ThreeViewport = dynamic(() => import('@/components/shared/ThreeViewport'), {
   ssr: false,
@@ -145,82 +152,15 @@ function partsToHierarchyItems(parts: Part[]): HierarchyItem[] {
   });
 }
 
-// ─── Screenshot helpers ──────────────────────────────────────────────────────
-
-/** Camera angles for multi-view capture: [azimuth°, elevation°, label] */
-const CAPTURE_ANGLES: [number, number, string][] = [
-  [30, 20, 'front-right'],
-  [210, 20, 'back-left'],
-  [120, 60, 'top-side'],
-];
-
-/** Render the scene group from a specific angle to a PNG Blob. */
-function renderFromAngle(
-  renderer: THREE.WebGLRenderer,
-  scene: THREE.Scene,
-  camera: THREE.PerspectiveCamera,
-  group: THREE.Group,
-  center: THREE.Vector3,
-  dist: number,
-  azimuthDeg: number,
-  elevationDeg: number,
-): Promise<Blob> {
-  const az = (azimuthDeg * Math.PI) / 180;
-  const el = (elevationDeg * Math.PI) / 180;
-  camera.position.set(
-    center.x + dist * Math.cos(el) * Math.sin(az),
-    center.y + dist * Math.sin(el),
-    center.z + dist * Math.cos(el) * Math.cos(az),
-  );
-  camera.lookAt(center);
-  renderer.render(scene, camera);
-
-  return new Promise<Blob>((resolve, reject) => {
-    renderer.domElement.toBlob(
-      (blob) => blob ? resolve(blob) : reject(new Error('Screenshot capture failed')),
-      'image/png',
-    );
-  });
-}
-
-/** Swap all mesh materials to segment colors, returns a restore function. */
-function applySegmentColorMaterials(
-  group: THREE.Group,
-  parts: Part[],
-): () => void {
-  const overrides: { mesh: THREE.Mesh; origMat: THREE.Material | THREE.Material[] }[] = [];
-  const colorMap = new Map<string, string>();
-  for (const p of parts) {
-    const color = p.color || '';
-    if (color) p.meshIds.forEach(mid => colorMap.set(mid, color));
-  }
-
-  group.traverse((child) => {
-    if (!(child instanceof THREE.Mesh)) return;
-    const id = child.name || child.uuid;
-    const color = colorMap.get(id);
-    if (color) {
-      overrides.push({ mesh: child, origMat: child.material });
-      child.material = new THREE.MeshStandardMaterial({
-        color, roughness: 0.6, metalness: 0.1,
-      });
-    }
-  });
-
-  return () => {
-    for (const { mesh, origMat } of overrides) {
-      mesh.material = origMat;
-    }
-  };
-}
+// ─── captureMultiViewScreenshots ─────────────────────────────────────────────
 
 /**
  * Capture multi-angle screenshots in both original and colored modes.
- * Returns { original: Blob[], colored: Blob[] } — one per CAPTURE_ANGLES entry.
+ * Returns { original: Blob[], colored: Blob[] } — originals use BASE_ANGLES, colored use BASE_ANGLES.
  */
 async function captureMultiViewScreenshots(
   group: THREE.Group,
-  parts: Part[],
+  parts: PartLike[],
 ): Promise<{ original: Blob[]; colored: Blob[] }> {
   const w = 768, h = 768;
   const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true, alpha: false });
@@ -247,14 +187,14 @@ async function captureMultiViewScreenshots(
 
   // 1. Capture original texture from all angles
   const original: Blob[] = [];
-  for (const [az, el] of CAPTURE_ANGLES) {
+  for (const [az, el] of BASE_ANGLES) {
     original.push(await renderFromAngle(renderer, tempScene, camera, group, center, dist, az, el));
   }
 
   // 2. Swap to segment colors and capture from all angles
   const restoreMaterials = applySegmentColorMaterials(group, parts);
   const colored: Blob[] = [];
-  for (const [az, el] of CAPTURE_ANGLES) {
+  for (const [az, el] of BASE_ANGLES) {
     colored.push(await renderFromAngle(renderer, tempScene, camera, group, center, dist, az, el));
   }
   restoreMaterials();
@@ -265,20 +205,6 @@ async function captureMultiViewScreenshots(
   renderer.dispose();
 
   return { original, colored };
-}
-
-/** Read the material colour of every Mesh child in the scene group. */
-function getMeshColors(group: THREE.Group): { id: string; color: string }[] {
-  const result: { id: string; color: string }[] = [];
-  group.traverse((child) => {
-    if (child instanceof THREE.Mesh) {
-      const mat = child.material as THREE.MeshStandardMaterial;
-      if (mat?.color) {
-        result.push({ id: child.name || child.uuid, color: '#' + mat.color.getHexString() });
-      }
-    }
-  });
-  return result;
 }
 
 // ─── splitSegmentedGlb ────────────────────────────────────────────────────────
@@ -1142,7 +1068,7 @@ export default function SegmentPage() {
         meshColors.map(mc => ({ id: mc.id, color: mc.color })),
         original,
         colored,
-        CAPTURE_ANGLES.map(([, , label]) => label),
+        BASE_ANGLES.map(([, , label]) => label),
       );
       const results: SmartOrganizeResult[] = response.parts;
 
