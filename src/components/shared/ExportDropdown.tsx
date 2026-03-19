@@ -3,9 +3,10 @@
 import { useState, useRef, useEffect } from 'react';
 import type { MutableRefObject } from 'react';
 import * as THREE from 'three';
-import { Upload, Box, ChevronDown, Globe } from 'lucide-react';
+import { Upload, Box, ChevronDown, Globe, FileBox } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useWorkspace } from '@/lib/workspace-context';
+import { convertToFbx } from '@/lib/api/phidias';
 
 interface ExportDropdownProps {
   className?: string;
@@ -125,11 +126,41 @@ async function downloadUsdzFromScene(scene: THREE.Group, baseName: string) {
   setTimeout(() => URL.revokeObjectURL(url), 5000);
 }
 
+/** Export the live Three.js scene as GLB, convert to FBX server-side, and download. */
+async function downloadFbxFromScene(scene: THREE.Group, baseName: string) {
+  const glb = await exportSceneToGlb(scene);
+  const glbBlob = new Blob([glb], { type: 'model/gltf-binary' });
+  const fbxBlob = await convertToFbx(glbBlob);
+  const url = URL.createObjectURL(fbxBlob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `${baseName}.fbx`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 5000);
+}
+
+/** Fetch GLB from URL, convert to FBX server-side, and download. */
+async function downloadFbx(modelUrl: string, baseName: string) {
+  const res = await fetch(modelUrl);
+  const glbBlob = await res.blob();
+  const fbxBlob = await convertToFbx(glbBlob);
+  const url = URL.createObjectURL(fbxBlob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `${baseName}.fbx`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 5000);
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 
 export default function ExportDropdown({ className, sceneRef }: ExportDropdownProps) {
   const [open, setOpen] = useState(false);
-  const [working, setWorking] = useState(false);
+  const [working, setWorking] = useState<string | false>(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const { assets, activeAssetId } = useWorkspace();
 
@@ -148,9 +179,9 @@ export default function ExportDropdown({ className, sceneRef }: ExportDropdownPr
 
   const baseName = activeAsset?.name.replace(/\.[^/.]+$/, '') ?? 'model';
 
-  async function handleExport(format: 'glb' | 'usdz') {
+  async function handleExport(format: 'glb' | 'usdz' | 'fbx') {
     if (!activeAsset?.modelUrl || working) return;
-    setWorking(true);
+    setWorking(format);
     setOpen(false);
     try {
       const liveScene = sceneRef?.current;
@@ -160,11 +191,17 @@ export default function ExportDropdown({ className, sceneRef }: ExportDropdownPr
         } else {
           downloadGlb(activeAsset.modelUrl, baseName);
         }
-      } else {
+      } else if (format === 'usdz') {
         if (liveScene) {
           await downloadUsdzFromScene(liveScene, baseName);
         } else {
           await downloadUsdz(activeAsset.modelUrl, baseName);
+        }
+      } else if (format === 'fbx') {
+        if (liveScene) {
+          await downloadFbxFromScene(liveScene, baseName);
+        } else {
+          await downloadFbx(activeAsset.modelUrl, baseName);
         }
       }
     } catch (err) {
@@ -179,25 +216,25 @@ export default function ExportDropdown({ className, sceneRef }: ExportDropdownPr
       {/* Split Button */}
       <div
         className="flex rounded-lg overflow-hidden"
-        style={{ border: '1px solid rgba(245,166,35,0.4)', opacity: disabled || working ? 0.5 : 1 }}
+        style={{ border: '1px solid rgba(245,166,35,0.4)', opacity: disabled || !!working ? 0.5 : 1 }}
       >
         {/* Main button — GLB */}
         <button
           className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold transition-opacity hover:opacity-90 disabled:cursor-not-allowed"
           style={{ background: 'var(--accent-gold)', color: '#1a1a2e' }}
-          disabled={disabled || working}
+          disabled={disabled || !!working}
           onClick={() => handleExport('glb')}
           title={disabled ? 'No active asset' : `Export "${activeAsset?.name}" as .glb`}
         >
           <Upload size={12} />
-          <span>{working ? 'Exporting…' : 'Export'}</span>
+          <span>{working ? (working === 'fbx' ? 'Converting…' : 'Exporting…') : 'Export'}</span>
         </button>
 
         {/* Dropdown chevron */}
         <button
           className="px-2 py-1.5 text-[#1a1a2e] transition-opacity hover:opacity-80 border-l disabled:cursor-not-allowed"
           style={{ background: 'var(--accent-gold)', borderColor: 'rgba(0,0,0,0.2)' }}
-          disabled={disabled || working}
+          disabled={disabled || !!working}
           onClick={() => setOpen(!open)}
         >
           <ChevronDown size={12} />
@@ -237,6 +274,19 @@ export default function ExportDropdown({ className, sceneRef }: ExportDropdownPr
               <div className="text-xs font-medium text-text-primary mb-0.5">.usdz</div>
               <div className="text-[11px] text-text-tertiary leading-tight">
                 Universal Scene Description (iOS AR)
+              </div>
+            </div>
+          </button>
+
+          <button
+            className="w-full flex items-start gap-3 px-4 py-3 hover:bg-bg-hover transition-colors text-left"
+            onClick={() => handleExport('fbx')}
+          >
+            <span className="mt-0.5 shrink-0 text-text-secondary"><FileBox size={14} /></span>
+            <div className="min-w-0">
+              <div className="text-xs font-medium text-text-primary mb-0.5">.fbx</div>
+              <div className="text-[11px] text-text-tertiary leading-tight">
+                Autodesk FBX (requires converter service)
               </div>
             </div>
           </button>
