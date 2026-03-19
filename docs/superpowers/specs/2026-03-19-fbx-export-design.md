@@ -15,27 +15,27 @@ User clicks "FBX"
   ↓
 exportSceneToGlb()
   ↓ GLB Blob
-POST /phidias/convert/fbx ──→ Receives GLB
-                               ↓
-                             Forward to Docker ─────────→ Blender headless
-                                                          bpy: GLB → FBX
-                               ↓                    ←──── Returns FBX file
-                             Returns FBX Blob
-  ↓ download .fbx       ←────
+POST /phidias/convert/fbx ──→ proxyRequest() ─────────→ Blender headless
+                                (streaming)               bpy: GLB → FBX
+  ↓ download .fbx       ←──── FBX stream         ←────── Returns FBX file
 ```
 
 ## Docker Container: Blender Converter
 
 ### Image & Service
 
-- **Base image**: `nytimes/blender:latest` (or equivalent Blender headless image)
-- **Internal service**: Lightweight Python HTTP server (FastAPI)
+- **Base image**: Official Blender PPA or `linuxserver/blender` (pin Blender 4.0+)
+- **Internal service**: FastAPI (Python)
 - **Port**: `8100`
 - **Dockerfile location**: `docker/blender-converter/`
+- **Health check**: `GET /health` → `{ "status": "ok" }`
 
-### Endpoint
+### Endpoints
 
 ```
+GET  /health
+  Response: 200, { "status": "ok" }
+
 POST /convert
   Request:  multipart/form-data, field "file" = GLB binary
   Response: application/octet-stream (FBX binary)
@@ -44,12 +44,43 @@ POST /convert
 
 ### Conversion Logic (Python + bpy)
 
-1. Save received GLB to temp file
-2. `bpy.ops.import_scene.gltf(filepath='input.glb')` — load model
-3. `bpy.ops.export_scene.fbx(filepath='output.fbx', path_mode='COPY', embed_textures=True)` — export
-   - `path_mode='COPY'` + `embed_textures=True` ensures textures are embedded in FBX
-   - Group hierarchy is preserved via GLB's node hierarchy
-4. Return FBX file, clean up temp files
+```python
+with tempfile.TemporaryDirectory() as tmpdir:
+    glb_path = os.path.join(tmpdir, 'input.glb')
+    fbx_path = os.path.join(tmpdir, 'output.fbx')
+
+    # Save uploaded GLB
+    with open(glb_path, 'wb') as f:
+        f.write(await file.read())
+
+    # Clear default scene
+    bpy.ops.wm.read_factory_settings(use_empty=True)
+
+    # Import GLB (preserves node hierarchy)
+    bpy.ops.import_scene.gltf(filepath=glb_path)
+
+    # Export FBX with embedded textures
+    bpy.ops.export_scene.fbx(
+        filepath=fbx_path,
+        path_mode='COPY',
+        embed_textures=True,
+    )
+
+    # Return FBX as streaming response
+    return FileResponse(fbx_path, media_type='application/octet-stream')
+```
+
+`tempfile.TemporaryDirectory()` ensures cleanup even if Blender crashes.
+
+### Dependencies (`requirements.txt`)
+
+```
+fastapi==0.115.0
+uvicorn==0.30.0
+python-multipart==0.0.9
+```
+
+Pin versions for reproducible Docker builds.
 
 ## Backend API
 
@@ -65,9 +96,19 @@ POST /convert
 
 New API route: `src/app/api/phidias/convert/fbx/route.ts`
 
-- Receives GLB from frontend
-- Forwards to Docker container at `CONVERT_API_URL/convert` (env var, default `http://localhost:8100`)
-- Streams FBX response back to frontend
+Uses the existing `proxyRequest()` streaming proxy — no FormData parsing needed:
+
+```typescript
+import { proxyRequest } from '../_proxy';
+
+const CONVERT_BASE = process.env.CONVERT_API_URL ?? 'http://localhost:8100';
+
+export async function POST(request: NextRequest) {
+    return proxyRequest(request, `${CONVERT_BASE}/convert`);
+}
+```
+
+This handles large files efficiently via streaming and follows the established proxy pattern.
 
 ### Web Component Mode
 
@@ -89,45 +130,50 @@ export async function convertToFbx(
 ): Promise<Blob>
 ```
 
-Sends `multipart/form-data` to `{getBackendApi()}/phidias/convert/fbx`, returns FBX Blob.
+Implementation:
+- Wraps `glbFile` in a `FormData` with field name `file`
+- POSTs to `{getBackendApi()}/phidias/convert/fbx`
+- Timeout: `300000` (5 minutes — Blender conversion of complex models can take time)
+- Returns FBX `Blob` from response
 
 ### Export Dropdown (`src/components/shared/ExportDropdown.tsx`)
 
 Add "FBX" as a third option in the dropdown menu (after GLB and USDZ).
 
+Update `handleExport` format type: `'glb' | 'usdz' | 'fbx'`
+
 On click:
 1. Call existing `exportSceneToGlb()` to get GLB ArrayBuffer
 2. Wrap as Blob, call `convertToFbx(blob)`
-3. Trigger browser download as `{baseName}.fbx`
+3. Trigger browser download as `{baseName}.fbx` (use existing `triggerDownload` helper from `loaders.ts`)
+
+**Progress text**: Show "Converting to FBX..." during the network round-trip (distinct from local-only exports).
+
+**When `sceneRef` is null** (no live scene): fetch the GLB from `modelUrl` as a Blob and send that to `convertToFbx()` instead.
 
 Material restoration (swap segment colors → originals before export) is already handled by `exportSceneToGlb()`.
-
-### Standalone Proxy (`src/app/api/phidias/convert/fbx/route.ts`)
-
-New route that:
-1. Receives GLB from frontend via FormData
-2. Forwards to `CONVERT_API_URL/convert`
-3. Returns FBX binary response
 
 ## Files to Create/Modify
 
 | File | Action | Responsibility |
 |------|--------|----------------|
 | `docker/blender-converter/Dockerfile` | **Create** | Blender headless image with FastAPI service |
-| `docker/blender-converter/server.py` | **Create** | FastAPI endpoint for GLB→FBX conversion |
-| `docker/blender-converter/requirements.txt` | **Create** | Python dependencies (fastapi, uvicorn, python-multipart) |
-| `src/app/api/phidias/convert/fbx/route.ts` | **Create** | Next.js API proxy route |
+| `docker/blender-converter/server.py` | **Create** | FastAPI endpoint with `/convert` and `/health` |
+| `docker/blender-converter/requirements.txt` | **Create** | Pinned Python dependencies |
+| `src/app/api/phidias/convert/fbx/route.ts` | **Create** | Streaming proxy via `proxyRequest()` |
 | `src/lib/api/phidias.ts` | **Modify** | Add `convertToFbx()` function |
-| `src/components/shared/ExportDropdown.tsx` | **Modify** | Add FBX option to dropdown |
+| `src/components/shared/ExportDropdown.tsx` | **Modify** | Add FBX option, progress text, sceneRef-null fallback |
+| `.env.example` | **Modify** | Add `CONVERT_API_URL` |
 
 ## Error Handling
 
-- Docker container unreachable → backend returns `500` with message "Conversion service unavailable"
-- Blender conversion fails → container returns `500` with Blender error message
-- Frontend shows error via existing toast/error mechanism
+- Docker container unreachable → `proxyRequest` returns upstream error → frontend shows "Conversion service unavailable"
+- Blender conversion fails → container returns `500` with error detail → frontend shows error message
+- Frontend shows errors via existing toast/error mechanism
+- FBX option remains visible even if Docker is down — error surfaces on attempt (simpler than health-check polling)
 
 ## Backward Compatibility
 
 - Existing GLB and USDZ exports are unchanged
 - FBX option only appears in the dropdown; no existing behavior is modified
-- `CONVERT_API_URL` env var is optional — if not set, FBX conversion uses default localhost URL (will fail gracefully if Docker is not running)
+- `CONVERT_API_URL` env var is optional — if not set, uses default localhost URL (fails gracefully if Docker is not running)
