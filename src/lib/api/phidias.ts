@@ -544,6 +544,26 @@ export async function smartOrganize(
   return data;
 }
 
+/**
+ * Convert a GLB file to FBX via the server-side Blender converter.
+ */
+export async function convertToFbx(
+  glbFile: Blob,
+): Promise<Blob> {
+  const formData = new FormData();
+  formData.append('file', glbFile, 'model.glb');
+
+  const { data } = await client.post<Blob>(
+    `${getBackendApi()}/phidias/convert/fbx`,
+    formData,
+    {
+      headers: { 'Content-Type': 'multipart/form-data' },
+      timeout: 300000,
+    },
+  );
+  return data;
+}
+
 export interface QwenText2ImgResponse {
   status: string;
   request_id: string;
