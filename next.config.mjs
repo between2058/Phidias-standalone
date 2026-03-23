@@ -15,6 +15,8 @@ const nextConfig = {
   // This allows the frontend to call /phidias/... and hit our API routes
   async rewrites() {
     return [
+      // 3dgrut rewrite must come first — more specific path takes priority
+      { source: '/phidias/3dgrut/:path*', destination: `${process.env.THREEDGRUT_API_URL || 'http://localhost:8191'}/:path*` },
       {
         source: '/phidias/:path*',
         destination: '/api/phidias/:path*',
