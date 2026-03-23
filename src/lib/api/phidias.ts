@@ -378,6 +378,55 @@ export async function generateReconSingle(
   return data;
 }
 
+// ============================================================================
+// Trellis.2 Generation (single image → 3D)
+// ============================================================================
+
+export async function generateTrellis(
+  file: File | Blob,
+  params: {
+    seed?: number;
+    pipeline_type?: '512' | '1024' | '1024_cascade' | '1536_cascade';
+    texture_size?: number;
+    decimation_target?: number;
+    remesh?: boolean;
+    ss_guidance_strength?: number;
+    ss_sampling_steps?: number;
+    slat_guidance_strength?: number;
+    slat_sampling_steps?: number;
+  } = {},
+): Promise<ReconViaGenOutput> {
+  const formData = new FormData();
+  formData.append('file', file);
+  if (params.seed !== undefined) formData.append('seed', String(params.seed));
+  if (params.pipeline_type !== undefined)
+    formData.append('pipeline_type', params.pipeline_type);
+  if (params.texture_size !== undefined)
+    formData.append('texture_size', String(params.texture_size));
+  if (params.decimation_target !== undefined)
+    formData.append('decimation_target', String(params.decimation_target));
+  if (params.remesh !== undefined)
+    formData.append('remesh', String(params.remesh));
+  if (params.ss_guidance_strength !== undefined)
+    formData.append('ss_guidance_strength', String(params.ss_guidance_strength));
+  if (params.ss_sampling_steps !== undefined)
+    formData.append('ss_sampling_steps', String(params.ss_sampling_steps));
+  if (params.slat_guidance_strength !== undefined)
+    formData.append('slat_guidance_strength', String(params.slat_guidance_strength));
+  if (params.slat_sampling_steps !== undefined)
+    formData.append('slat_sampling_steps', String(params.slat_sampling_steps));
+
+  const { data } = await client.post<ReconViaGenOutput>(
+    `${getBackendApi()}/phidias/reconviagen/generate-single`,
+    formData,
+    {
+      headers: { 'Content-Type': 'multipart/form-data' },
+      timeout: 300000,
+    },
+  );
+  return data;
+}
+
 export async function generateReconMulti(
   files: File[] | Blob[],
   params: {

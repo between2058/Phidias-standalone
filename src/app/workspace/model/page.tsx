@@ -27,7 +27,7 @@ import {
 } from '@/lib/scene';
 import { useWorkspace } from '@/lib/workspace-context';
 import {
-  generateReconSingle,
+  generateTrellis,
   generateReconMulti,
   generateReconBatch,
   generateText2Img,
@@ -185,7 +185,10 @@ export default function ModelPage() {
 
       const advancedParams = {
         seed: params.seed,
+        pipeline_type: params.pipelineType,
         texture_size: params.textureSize,
+        decimation_target: params.decimationTarget,
+        remesh: params.remesh,
         ss_guidance_strength: params.ss.guidance_strength,
         ss_sampling_steps: params.ss.sampling_steps,
         slat_guidance_strength: params.shapSlat.guidance_strength,
@@ -204,7 +207,7 @@ export default function ModelPage() {
           });
           setActiveAssetId(assetId);
           try {
-            const result = await generateReconSingle(file, advancedParams);
+            const result = await generateTrellis(file, advancedParams);
             const localUrl = await downloadGlb(
               result.glb_url,
               result.request_id,
@@ -278,7 +281,7 @@ export default function ModelPage() {
             const imgFile = new File([imgBlob], 'text2img-result.png', {
               type: imgBlob.type || 'image/png',
             });
-            const result = await generateReconSingle(imgFile, advancedParams);
+            const result = await generateTrellis(imgFile, advancedParams);
             const localUrl = await downloadGlb(
               result.glb_url,
               result.request_id,
