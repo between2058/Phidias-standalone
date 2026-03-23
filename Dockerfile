@@ -8,13 +8,13 @@ ADD ${DOCKER_BUILD_FOLDER} ${INSTALL_PATH}
 
 RUN mkdir -p /opt/scripts
 WORKDIR /app
-ENV http_proxy=${http_proxy}
-ENV https_proxy=${http_proxy}
-ENV HTTP_PROXY=${http_proxy}
-ENV HTTPS_PROXY=${http_proxy}
+ENV http_proxy=http://proxy.intra:80
+ENV https_proxy=http://proxy.intra:80
+ENV HTTP_PROXY=http://proxy.intra:80
+ENV HTTPS_PROXY=http://proxy.intra:80
 
-RUN npm config set proxy ${http_proxy}
-RUN npm config set https-proxy ${https_proxy}
+RUN npm config set proxy http://proxy.intra:80
+RUN npm config set https-proxy http://proxy.intra:80
 
 RUN npm install -g pnpm@10.2.0
 
