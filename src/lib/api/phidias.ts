@@ -427,6 +427,38 @@ export async function generateTrellis(
   return data;
 }
 
+/**
+ * Texture an existing mesh using a reference image via Trellis.2.
+ */
+export async function textureTrellis(
+  referenceImage: File | Blob,
+  meshFile: File | Blob,
+  params: {
+    seed?: number;
+    resolution?: number;
+    texture_size?: number;
+  } = {},
+): Promise<ReconViaGenOutput> {
+  const formData = new FormData();
+  formData.append('file', referenceImage, 'reference.png');
+  formData.append('mesh_file', meshFile, 'model.glb');
+  if (params.seed !== undefined) formData.append('seed', String(params.seed));
+  if (params.resolution !== undefined)
+    formData.append('resolution', String(params.resolution));
+  if (params.texture_size !== undefined)
+    formData.append('texture_size', String(params.texture_size));
+
+  const { data } = await client.post<ReconViaGenOutput>(
+    `${getBackendApi()}/phidias/trellis2/texture`,
+    formData,
+    {
+      headers: { 'Content-Type': 'multipart/form-data' },
+      timeout: 300000,
+    },
+  );
+  return data;
+}
+
 export async function generateReconMulti(
   files: File[] | Blob[],
   params: {

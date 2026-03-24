@@ -407,50 +407,7 @@ export default function TextureGeneratePanel({
           </div>
         </div>
 
-        {/* Advanced — Stage 3 tex_slat only */}
-        <CollapsibleSection title="Advanced Settings">
-          <div className="pt-2 space-y-2">
-            <p className="text-[10px] font-semibold text-[#D5B451] uppercase tracking-wider">
-              Stage 3 — Material Texturing
-            </p>
-            <SliderRow
-              label="Guidance Strength"
-              value={texSlat.guidance_strength}
-              min={1.0}
-              max={10.0}
-              step={0.1}
-              onChange={(v) => setTexSlat({ ...texSlat, guidance_strength: v })}
-              display={(v) => v.toFixed(1)}
-            />
-            <SliderRow
-              label="Guidance Rescale"
-              value={texSlat.guidance_rescale}
-              min={0.0}
-              max={1.0}
-              step={0.01}
-              onChange={(v) => setTexSlat({ ...texSlat, guidance_rescale: v })}
-              display={(v) => v.toFixed(2)}
-            />
-            <SliderRow
-              label="Sampling Steps"
-              value={texSlat.sampling_steps}
-              min={1}
-              max={50}
-              step={1}
-              onChange={(v) => setTexSlat({ ...texSlat, sampling_steps: v })}
-              display={(v) => String(v)}
-            />
-            <SliderRow
-              label="Rescale T"
-              value={texSlat.rescale_t}
-              min={1.0}
-              max={6.0}
-              step={0.1}
-              onChange={(v) => setTexSlat({ ...texSlat, rescale_t: v })}
-              display={(v) => v.toFixed(1)}
-            />
-          </div>
-        </CollapsibleSection>
+        {/* Advanced settings removed — Trellis.2 /texture only exposes seed, resolution, texture_size */}
       </div>
 
       {/* CTA */}
