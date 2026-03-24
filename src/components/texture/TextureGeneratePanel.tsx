@@ -15,8 +15,8 @@ interface TextureGeneratePanelProps {
   progress: ProgressUpdate | null;
   /** Whether a model is currently loaded in the viewport */
   hasActiveModel: boolean;
-  /** Original source image URL used to generate the model (if available) */
-  sourceImageUrl?: string;
+  /** Preview URL of the Qwen-styled reference image */
+  text2ImgPreviewUrl?: string | null;
 }
 
 const RESOLUTION_OPTIONS = [
@@ -147,7 +147,7 @@ export default function TextureGeneratePanel({
   isGenerating,
   progress,
   hasActiveModel,
-  sourceImageUrl,
+  text2ImgPreviewUrl,
 }: TextureGeneratePanelProps) {
   const [mode, setMode] = useState<'image' | 'text'>('image');
 
@@ -269,14 +269,28 @@ export default function TextureGeneratePanel({
               style={{ background: '#0E243E' }}
             >
               <div className="flex items-center gap-2 font-medium text-[#D5B451]">
-                <span>✏️</span> Text → Qwen → Reference → TRELLIS.2
+                <span>✏️</span> Viewport Screenshot → Qwen Edit → TRELLIS.2
               </div>
               <p className="leading-relaxed">
-                {sourceImageUrl
-                  ? 'Original generation image found — will be used as base for Qwen style transfer.'
-                  : 'No source image — a viewport render will be captured as base.'}
+                A screenshot of the current viewport will be captured and styled by Qwen based on your prompt, then used as reference for texturing.
               </p>
             </div>
+
+            {/* Qwen preview */}
+            {text2ImgPreviewUrl && (
+              <div className="rounded-lg overflow-hidden border border-[#333355]">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={text2ImgPreviewUrl}
+                  alt="Styled reference"
+                  className="w-full object-cover"
+                  style={{ maxHeight: '160px' }}
+                />
+                <div className="text-[10px] text-[#94a3b8] bg-black/50 px-2 py-1 text-center">
+                  Styled Reference Image
+                </div>
+              </div>
+            )}
 
             {/* Prompt */}
             <div>
@@ -428,9 +442,7 @@ export default function TextureGeneratePanel({
               color: '#0E243E',
             }}
           >
-            {mode === 'text'
-              ? 'Generate Texture ⚡ 30'
-              : 'Generate Texture ⚡ 20'}
+            Generate Texture
           </button>
         )}
       </div>
