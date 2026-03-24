@@ -1,6 +1,5 @@
 FROM node:20-alpine
 
-RUN apk add bash vim busybox-extras
 ARG BUILD_FOLDER=""
 ENV DOCKER_BUILD_FOLDER=${BUILD_FOLDER}
 ARG INSTALL_PATH=/app
