@@ -57,7 +57,7 @@ export default function TexturePage() {
     const handleGenerate = useCallback(async (params: TextureRequest) => {
         setIsGenerating(true);
         setProgress({ percent: 0, stage: 'Starting...' });
-        const result = await mockGenerateTexture(params, (update) =>
+        const result = await mockGenerateTexture(SAMPLE_GLB, (update: ProgressUpdate) =>
             setProgress(update),
         );
         setModelUrl(result.data.modelUrl);

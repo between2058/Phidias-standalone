@@ -110,8 +110,8 @@ export default function AgentChatPanel({
 
         onNodeCreated({
           id: nodeId,
-          type: result.canvasNodeType,
-          modelUrl: result.modelUrl,
+          type: result.canvasNodeType ?? '3d-asset',
+          modelUrl: result.modelUrl ?? '',
           label,
         });
 
