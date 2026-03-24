@@ -440,8 +440,13 @@ export async function textureTrellis(
   } = {},
 ): Promise<ReconViaGenOutput> {
   const formData = new FormData();
-  formData.append('file', referenceImage, 'reference.png');
-  formData.append('mesh_file', meshFile, 'model.glb');
+  // Ensure blobs have correct MIME type for FastAPI validation
+  const imgBlob = referenceImage instanceof File ? referenceImage
+    : new Blob([referenceImage], { type: referenceImage.type || 'image/png' });
+  const glbBlob = meshFile instanceof File ? meshFile
+    : new Blob([meshFile], { type: meshFile.type || 'model/gltf-binary' });
+  formData.append('file', imgBlob, 'reference.png');
+  formData.append('mesh_file', glbBlob, 'model.glb');
   if (params.seed !== undefined) formData.append('seed', String(params.seed));
   if (params.resolution !== undefined)
     formData.append('resolution', String(params.resolution));
