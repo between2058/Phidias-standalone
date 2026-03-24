@@ -440,11 +440,17 @@ export async function textureTrellis(
   } = {},
 ): Promise<ReconViaGenOutput> {
   const formData = new FormData();
-  // Ensure blobs have correct MIME type for FastAPI validation
-  const imgBlob = referenceImage instanceof File ? referenceImage
-    : new Blob([referenceImage], { type: referenceImage.type || 'image/png' });
-  const glbBlob = meshFile instanceof File ? meshFile
-    : new Blob([meshFile], { type: meshFile.type || 'model/gltf-binary' });
+  // Ensure blobs have correct MIME type and filename for FastAPI validation
+  const imgBlob = new File(
+    [referenceImage],
+    'reference.png',
+    { type: referenceImage.type || 'image/png' },
+  );
+  const glbBlob = new File(
+    [meshFile],
+    'model.glb',
+    { type: meshFile.type || 'model/gltf-binary' },
+  );
   formData.append('file', imgBlob, 'reference.png');
   formData.append('mesh_file', glbBlob, 'model.glb');
   if (params.seed !== undefined) formData.append('seed', String(params.seed));
@@ -689,7 +695,7 @@ export async function editImage(
   params: Record<string, unknown> = {},
 ): Promise<QwenEditResponse> {
   const formData = new FormData();
-  formData.append('file', imageBlob);
+  formData.append('file', imageBlob, 'image.png');
   formData.append('prompt', prompt);
   if (params.steps !== undefined)
     formData.append('steps', String(params.steps));
