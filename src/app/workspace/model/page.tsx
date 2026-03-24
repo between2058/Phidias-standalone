@@ -63,6 +63,13 @@ async function downloadGlb(glbUrl: string, requestId: string): Promise<string> {
   return URL.createObjectURL(blob);
 }
 
+/** Download a GLB from the trellis2 proxy and return an object URL */
+async function downloadGlbTrellis(glbUrl: string, requestId: string): Promise<string> {
+  const fileName = glbUrl.split('/').pop() || 'model.glb';
+  const blob = await downloadPhidiasImage(requestId, fileName, 'trellis2');
+  return URL.createObjectURL(blob);
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Page
 // ─────────────────────────────────────────────────────────────────────────────
@@ -208,7 +215,7 @@ export default function ModelPage() {
           setActiveAssetId(assetId);
           try {
             const result = await generateTrellis(file, advancedParams);
-            const localUrl = await downloadGlb(
+            const localUrl = await downloadGlbTrellis(
               result.glb_url,
               result.request_id,
             );
@@ -282,7 +289,7 @@ export default function ModelPage() {
               type: imgBlob.type || 'image/png',
             });
             const result = await generateTrellis(imgFile, advancedParams);
-            const localUrl = await downloadGlb(
+            const localUrl = await downloadGlbTrellis(
               result.glb_url,
               result.request_id,
             );

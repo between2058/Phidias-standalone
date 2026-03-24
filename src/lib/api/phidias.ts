@@ -417,7 +417,7 @@ export async function generateTrellis(
     formData.append('slat_sampling_steps', String(params.slat_sampling_steps));
 
   const { data } = await client.post<ReconViaGenOutput>(
-    `${getBackendApi()}/phidias/reconviagen/generate-single`,
+    `${getBackendApi()}/phidias/trellis2/generate`,
     formData,
     {
       headers: { 'Content-Type': 'multipart/form-data' },
