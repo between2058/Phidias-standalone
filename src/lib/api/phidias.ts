@@ -668,13 +668,19 @@ export async function generateText2Img(
   prompt: string,
   params: Record<string, unknown> = {},
 ): Promise<QwenText2ImgResponse> {
+  const formData = new FormData();
+  formData.append('prompt', prompt);
+  for (const [key, val] of Object.entries(params)) {
+    if (val !== undefined) formData.append(key, String(val));
+  }
+
   const { data } = await client.post<QwenText2ImgResponse>(
     `${getBackendApi()}/phidias/qwen/text2img`,
+    formData,
     {
-      prompt,
-      ...params,
+      headers: { 'Content-Type': 'multipart/form-data' },
+      timeout: 300000,
     },
-    { timeout: 300000 },
   );
 
   const requestId = data.request_id;
