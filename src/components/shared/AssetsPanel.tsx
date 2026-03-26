@@ -942,9 +942,17 @@ export default function AssetsPanel({ defaultTab = 'assets' }: { defaultTab?: Pa
     setIsDragOver(false);
     const file = e.dataTransfer.files[0];
     if (!file) return;
-    const allowed = ['.glb', '.gltf', '.obj', '.fbx', '.stl', '.ply', '.usdz'];
+    const allowed = ['.glb', '.gltf', '.obj', '.fbx', '.stl', '.ply', '.usdz', '.stp', '.step', '.iges', '.igs', '.brep', '.brp'];
     const ext = file.name.substring(file.name.lastIndexOf('.')).toLowerCase();
     if (!allowed.includes(ext)) return;
+
+    // CAD files need special handling via the CAD page's import pipeline
+    const cadExts = ['.stp', '.step', '.iges', '.igs', '.brep', '.brp'];
+    if (cadExts.includes(ext)) {
+      window.dispatchEvent(new CustomEvent('phidias:cad-file-upload', { detail: file }));
+      return;
+    }
+
     const url = URL.createObjectURL(file);
     const id = addAsset({
       name: file.name.replace(/\.[^.]+$/, ''),

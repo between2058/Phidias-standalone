@@ -29,7 +29,16 @@ const nextConfig = {
     ];
   },
 
-  webpack: (config) => {
+  webpack: (config, { isServer }) => {
+    // WASM support for occt-import-js
+    config.experiments = { ...config.experiments, asyncWebAssembly: true };
+
+    // Exclude occt-import-js from SSR bundling (browser-only WASM)
+    if (isServer) {
+      config.externals = config.externals || [];
+      config.externals.push('occt-import-js');
+    }
+
     // Stub physics engine — we don't use PlayCanvas physics
     config.resolve.alias['sync-ammo'] = path.resolve(__dirname, 'src/lib/stubs/sync-ammo.js');
 

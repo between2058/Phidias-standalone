@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Camera, Sparkles, Scissors, Paintbrush, Bell, Settings } from 'lucide-react';
+import { Camera, Sparkles, Scissors, Paintbrush, Hexagon, Bell, Settings } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface SidebarTab {
@@ -24,7 +24,11 @@ const tabs: SidebarTab[] = [
     label: 'Texture',
     href: '/workspace/texture',
   },
-  //   { icon: <Atom size={20} />, label: 'Physics', href: '/workspace/physics' },
+  {
+    icon: <Hexagon size={20} />,
+    label: 'CAD',
+    href: '/workspace/cad',
+  },
   //   { icon: <Clapperboard size={20} />, label: 'Scene', href: '/workspace/scene' },
   //   { icon: <Globe size={20} />, label: '3D World', href: '/workspace/world' },
 ];
