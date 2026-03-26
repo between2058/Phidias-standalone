@@ -30,7 +30,7 @@ import { cadImport, cadDedup } from '@/lib/api/phidias';
 import { diffCADResults } from '@/lib/cad-diff';
 import type { DiffResult } from '@/lib/cad-diff';
 import { useCADStore } from '@/store/cad-store';
-import { moveNode, groupNodes, ungroupNode, deleteNodes } from '@/lib/cad-tree-ops';
+import { cadNewGroup, cadGroupNodes, cadUngroupNode, cadDeleteNodes } from '@/lib/cad-node-ops';
 import { Sparkles, Undo2, Redo2, GitCompareArrows } from 'lucide-react';
 
 const ThreeViewport = dynamic(() => import('@/components/shared/ThreeViewport'), {
@@ -360,30 +360,34 @@ export default function CADPage() {
     }, []);
 
     // ── Manual grouping: DnD and context menu ─────────────────────────────────
-    const handleMoveNode = useCallback((nodeId: string, targetParentId: string | null, insertIndex?: number) => {
-        setHierarchyItems(prev => moveNode(prev, nodeId, targetParentId, insertIndex));
-    }, [setHierarchyItems]);
+    const handleMoveNode = useCallback((_nodeId: string, _targetParentId: string | null, _insertIndex?: number) => {
+        // TODO: implement CADNode-based move
+        console.warn('[CAD] Move node not yet implemented for CADNode tree');
+    }, []);
 
     const handleContextAction = useCallback((action: 'new-group' | 'group-selected' | 'ungroup' | 'delete', nodeId: string) => {
+        if (!cadResult) return;
+        let newRoot = cadResult.root;
         switch (action) {
             case 'new-group':
-                setHierarchyItems(prev => groupNodes(prev, [], `New Group`));
+                newRoot = cadNewGroup(cadResult.root);
                 break;
             case 'group-selected': {
                 const ids = cadSelectedNodeIds.length > 1 ? cadSelectedNodeIds : [nodeId];
-                setHierarchyItems(prev => groupNodes(prev, ids));
+                newRoot = cadGroupNodes(cadResult.root, ids);
                 break;
             }
             case 'ungroup':
-                setHierarchyItems(prev => ungroupNode(prev, nodeId));
+                newRoot = cadUngroupNode(cadResult.root, nodeId);
                 break;
             case 'delete': {
                 const ids = cadSelectedNodeIds.length > 1 ? cadSelectedNodeIds : [nodeId];
-                setHierarchyItems(prev => deleteNodes(prev, ids));
+                newRoot = cadDeleteNodes(cadResult.root, ids);
                 break;
             }
         }
-    }, [setHierarchyItems, cadSelectedNodeIds]);
+        setCadResult({ ...cadResult, root: newRoot });
+    }, [cadResult, cadSelectedNodeIds]);
 
     // ── Auto Clean Pipeline ───────────────────────────────────────────────────
     const handleAutoClean = useCallback((options: AutoCleanOptions) => {
