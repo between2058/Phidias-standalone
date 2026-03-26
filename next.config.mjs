@@ -11,6 +11,13 @@ const nextConfig = {
   // Enable standalone output for optimized docker builds
   output: 'standalone',
 
+  // Remove body size limit for API routes (CAD files can exceed 2GB)
+  experimental: {
+    serverActions: {
+      bodySizeLimit: 'Infinity',
+    },
+  },
+
   // Skip ESLint during builds (fix lint errors incrementally later)
   eslint: {
     ignoreDuringBuilds: true,

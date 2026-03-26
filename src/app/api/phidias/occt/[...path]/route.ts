@@ -1,6 +1,10 @@
 import { NextRequest } from 'next/server';
 import { proxyRequest } from '../../_proxy';
 
+// Remove body size limit for large CAD files (STEP files can exceed 2GB)
+export const dynamic = 'force-dynamic';
+export const maxDuration = 300;
+
 const OCCT_BASE = process.env.OCCT_API_URL ?? 'http://172.18.246.141:8200';
 
 /**
