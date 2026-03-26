@@ -470,6 +470,63 @@ export async function textureTrellis(
   return data;
 }
 
+// ============================================================================
+// CAD — OCCT Server Integration
+// ============================================================================
+
+export interface CADImportResponse {
+  session_id: string;
+  root: Record<string, unknown>;
+  meshes: Record<string, unknown>[];
+}
+
+export interface CADDedupGroup {
+  hash: string;
+  name: string;
+  mesh_indices: number[];
+  count: number;
+}
+
+export interface CADDedupResponse {
+  groups: CADDedupGroup[];
+  total_parts: number;
+  unique_parts: number;
+  duplicate_parts: number;
+}
+
+/**
+ * Import a STEP/IGES/BREP file via OCCT server (for large files >50MB).
+ */
+export async function cadImport(
+  file: File | Blob,
+): Promise<CADImportResponse> {
+  const formData = new FormData();
+  formData.append('file', file, (file as File).name || 'model.stp');
+
+  const { data } = await client.post<CADImportResponse>(
+    `${getBackendApi()}/phidias/occt/import`,
+    formData,
+    {
+      headers: { 'Content-Type': 'multipart/form-data' },
+      timeout: 600000,
+    },
+  );
+  return data;
+}
+
+/**
+ * Find duplicate parts in a server-imported CAD model.
+ */
+export async function cadDedup(
+  sessionId: string,
+): Promise<CADDedupResponse> {
+  const { data } = await client.post<CADDedupResponse>(
+    `${getBackendApi()}/phidias/occt/dedup`,
+    { session_id: sessionId },
+  );
+  return data;
+}
+
 export async function generateReconMulti(
   files: File[] | Blob[],
   params: {

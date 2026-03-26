@@ -18,6 +18,7 @@ from routers.import_router import router as import_router
 from routers.ops_router import router as ops_router
 from routers.export_router import router as export_router
 from routers.session_router import router as session_router
+from routers.dedup_router import router as dedup_router
 
 
 @asynccontextmanager
@@ -51,6 +52,7 @@ app.include_router(import_router)
 app.include_router(ops_router)
 app.include_router(export_router)
 app.include_router(session_router)
+app.include_router(dedup_router)
 
 
 @app.get("/health")

@@ -26,6 +26,7 @@ import type {
     CADImportResult,
     DuplicateGroup,
 } from '@/lib/occt-bridge';
+import { cadImport, cadDedup } from '@/lib/api/phidias';
 import { diffCADResults } from '@/lib/cad-diff';
 import type { DiffResult } from '@/lib/cad-diff';
 import { useCADStore } from '@/store/cad-store';
@@ -114,6 +115,7 @@ export default function CADPage() {
     const [cadProgress, setCadProgress] = useState<CADImportProgress | null>(null);
     const [cadResult, setCadResult] = useState<CADImportResult | null>(null);
     const [duplicates, setDuplicates] = useState<DuplicateGroup[]>([]);
+    const [sessionId, setSessionId] = useState<string | null>(null);
     const [cadSelectedNodeId, setCadSelectedNodeId] = useState<string | null>(null);
     const [cadSelectedNodeIds, setCadSelectedNodeIds] = useState<string[]>([]);
     const [highlightedMeshIndices, setHighlightedMeshIndices] = useState<Set<number>>(new Set());
@@ -235,18 +237,39 @@ export default function CADPage() {
         sceneRef.current = null;
     }, [activeAssetId]);
 
-    // ── CAD File Import ────────────────────────────────────────────────────────
+    // ── CAD File Import (hybrid: WASM ≤50MB, server >50MB) ─────────────────────
+    const SERVER_IMPORT_THRESHOLD = 50 * 1024 * 1024; // 50MB
+
     const handleFileImport = useCallback(async (file: File) => {
         setIsLoading(true);
         setCadProgress({ stage: 'Reading file...', percent: 0 });
         setCadSelectedNodeId(null);
         setCadSelectedNodeIds([]);
         setHighlightedMeshIndices(new Set());
+        setSessionId(null);
 
         try {
             const t0 = performance.now();
-            const rawResult = await importStepFile(file, setCadProgress);
-            const result = expandHierarchy(rawResult);
+            let result: CADImportResult;
+
+            if (file.size > SERVER_IMPORT_THRESHOLD) {
+                // Large file → OCCT server backend
+                setCadProgress({ stage: 'Uploading to server...', percent: 10 });
+                const serverResult = await cadImport(file);
+                setSessionId(serverResult.session_id);
+
+                // Convert server response to CADImportResult format
+                const rawResult = {
+                    root: serverResult.root,
+                    meshes: serverResult.meshes,
+                } as unknown as CADImportResult;
+                result = expandHierarchy(rawResult);
+                setCadProgress({ stage: 'Processing...', percent: 70 });
+            } else {
+                // Small file → client-side WASM (fast)
+                const rawResult = await importStepFile(file, setCadProgress);
+                result = expandHierarchy(rawResult);
+            }
 
             setCadResult(result);
             setDuplicates(detectDuplicates(result.meshes));
@@ -258,7 +281,7 @@ export default function CADPage() {
             disposeCADMeshBuffers(result);
 
             const elapsed = ((performance.now() - t0) / 1000).toFixed(1);
-            console.log(`[CAD Import] ${file.name}: ${elapsed}s`);
+            console.log(`[CAD Import] ${file.name}: ${elapsed}s (${file.size > SERVER_IMPORT_THRESHOLD ? 'server' : 'wasm'})`);
 
             const assetId = addAsset({
                 name: file.name.replace(/\.[^.]+$/, '') || 'CAD Import',
