@@ -105,9 +105,14 @@ export default function SegmentHierarchyPanel({
       key={part.id}
       onClick={(e) => {
         if (e.detail === 2) return;
+        const isMulti = e.ctrlKey || e.metaKey;
         if (clickTimerRef.current) clearTimeout(clickTimerRef.current);
         clickTimerRef.current = setTimeout(() => {
-          handleRowClick(e, part.id);
+          if (isMulti) {
+            onSelectPartMulti(part.id);
+          } else {
+            onSelectPart(part.id === selectedPartId && selectedPartIds.length === 1 ? null : part.id);
+          }
           clickTimerRef.current = null;
         }, 200);
       }}
@@ -178,9 +183,14 @@ export default function SegmentHierarchyPanel({
         <div
           onClick={(e) => {
             if (e.detail === 2) return;
+            const isMulti = e.ctrlKey || e.metaKey;
             if (clickTimerRef.current) clearTimeout(clickTimerRef.current);
             clickTimerRef.current = setTimeout(() => {
-              handleRowClick(e, group.id);
+              if (isMulti) {
+                onSelectPartMulti(group.id);
+              } else {
+                onSelectPart(group.id === selectedPartId && selectedPartIds.length === 1 ? null : group.id);
+              }
               clickTimerRef.current = null;
             }, 200);
           }}
