@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { cn } from '@/lib/utils';
 import TransformPanel from '@/components/shared/TransformPanel';
 import type { TransformValues } from '@/components/shared/TransformPanel';
@@ -40,6 +40,7 @@ export default function SegmentHierarchyPanel({
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingName, setEditingName] = useState('');
   const renameInputRef = useRef<HTMLInputElement>(null);
+  const clickTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const startEditing = (id: string, currentName: string) => {
     setEditingId(id);
@@ -86,6 +87,12 @@ export default function SegmentHierarchyPanel({
     }
   };
 
+  useEffect(() => {
+    return () => {
+      if (clickTimerRef.current) clearTimeout(clickTimerRef.current);
+    };
+  }, []);
+
   const isSelected = (id: string) => selectedPartIds.includes(id);
 
   // Top-level items: groups + ungrouped parts (no parentId)
@@ -98,10 +105,18 @@ export default function SegmentHierarchyPanel({
       key={part.id}
       onClick={(e) => {
         if (e.detail === 2) return;
-        handleRowClick(e, part.id);
+        if (clickTimerRef.current) clearTimeout(clickTimerRef.current);
+        clickTimerRef.current = setTimeout(() => {
+          handleRowClick(e, part.id);
+          clickTimerRef.current = null;
+        }, 200);
       }}
       onDoubleClick={(e) => {
         e.stopPropagation();
+        if (clickTimerRef.current) {
+          clearTimeout(clickTimerRef.current);
+          clickTimerRef.current = null;
+        }
         startEditing(part.id, part.name);
       }}
       className={cn(
@@ -163,10 +178,18 @@ export default function SegmentHierarchyPanel({
         <div
           onClick={(e) => {
             if (e.detail === 2) return;
-            handleRowClick(e, group.id);
+            if (clickTimerRef.current) clearTimeout(clickTimerRef.current);
+            clickTimerRef.current = setTimeout(() => {
+              handleRowClick(e, group.id);
+              clickTimerRef.current = null;
+            }, 200);
           }}
           onDoubleClick={(e) => {
             e.stopPropagation();
+            if (clickTimerRef.current) {
+              clearTimeout(clickTimerRef.current);
+              clickTimerRef.current = null;
+            }
             startEditing(group.id, group.name);
           }}
           className={cn(
