@@ -48,7 +48,7 @@ const getAssetUrl = (path: string) => {
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
-export type RenderMode = 'solid' | 'wireframe' | 'textured' | 'matcap';
+export type RenderMode = 'solid' | 'wireframe' | 'textured' | 'matcap' | 'normal';
 
 export interface ThreeViewportProps {
   /** URL to load as a GLB/GLTF model */
@@ -332,6 +332,10 @@ function GLBModel({
         }
         case 'matcap': {
           child.material = new THREE.MeshMatcapMaterial({ color: '#cccccc' });
+          break;
+        }
+        case 'normal': {
+          child.material = new THREE.MeshNormalMaterial();
           break;
         }
         case 'textured':
