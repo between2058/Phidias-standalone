@@ -11,6 +11,7 @@ import dynamic from 'next/dynamic';
 import type * as THREE from 'three';
 import ModelGeneratePanel from '@/components/model/ModelGeneratePanel';
 import ExportDropdown from '@/components/shared/ExportDropdown';
+import RenderModeSelector from '@/components/shared/RenderModeSelector';
 import type {
   ProgressUpdate,
   GenerateModelRequest,
@@ -92,7 +93,7 @@ export default function ModelPage() {
   const sceneRef = useRef<THREE.Group | null>(null);
   const [progress, setProgress] = useState<ProgressUpdate | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
-  const [renderMode] = useState<RenderMode>('textured');
+  const [renderMode, setRenderMode] = useState<RenderMode>('textured');
   const [transformMode] = useState<'translate' | 'rotate' | 'scale' | null>(
     null,
   );
@@ -418,6 +419,12 @@ export default function ModelPage() {
       {/* Viewport */}
       <main className="flex-1 relative overflow-hidden flex flex-col">
         <div className="flex-1 relative">
+          <RenderModeSelector
+            availableModes={['textured', 'solid', 'wireframe', 'normal']}
+            current={renderMode}
+            onChange={setRenderMode}
+            className="absolute top-3 left-3 z-10"
+          />
           {modelUrl || isGenerating ? (
             <Suspense fallback={null}>
               <ThreeViewport
