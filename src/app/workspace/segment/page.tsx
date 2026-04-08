@@ -725,7 +725,7 @@ export default function SegmentPage() {
     scene.traverse((child) => {
       if (
         child instanceof THREE.Group &&
-        (child.name.startsWith('merged_') || child.name.startsWith('group_'))
+        (child.userData.partId || child.name.startsWith('merged_') || child.name.startsWith('group_'))
       ) {
         toRemove.push(child);
       }
@@ -747,7 +747,8 @@ export default function SegmentPage() {
     targetParts.forEach((part) => {
       if (part.isGroup && part.childIds && part.childIds.length > 0) {
         const threeGroup = new THREE.Group();
-        threeGroup.name = part.id;
+        threeGroup.name = part.name;
+        threeGroup.userData.partId = part.id;
         const childMeshIds = part.childIds.flatMap(
           (cid) => targetParts.find((p) => p.id === cid)?.meshIds ?? []
         );
@@ -758,7 +759,8 @@ export default function SegmentPage() {
         meshObjs.forEach((obj) => threeGroup.attach(obj));
       } else if (part.meshIds.length > 1) {
         const threeGroup = new THREE.Group();
-        threeGroup.name = part.id;
+        threeGroup.name = part.name;
+        threeGroup.userData.partId = part.id;
         const meshObjs = part.meshIds
           .map((mid) => registry.get(mid)?.obj ?? findObjectInScene(scene, mid))
           .filter((o): o is THREE.Object3D => o !== null);
@@ -771,6 +773,17 @@ export default function SegmentPage() {
     // Three.js groups and object transforms naturally persist through 
     // node re-parenting. The custom undo/redo logic (applyTransformSnapshot)
     // handles imperative transform restoration independently of Zundo.
+
+    // Sync mesh names for single-mesh parts
+    targetParts.forEach((part) => {
+      if (!part.isGroup && part.meshIds.length === 1) {
+        const entry = registry.get(part.meshIds[0]);
+        if (entry?.obj) {
+          entry.obj.name = part.name;
+          entry.obj.userData.partId = part.id;
+        }
+      }
+    });
 
     // Step 4: Restore visibility from the target parts snapshot.
     // zundo restores parts[].visible in React state, but the Three.js
@@ -911,7 +924,8 @@ export default function SegmentPage() {
     setLastClickedMeshId(mergedId);
     if (sceneRef.current) {
       const threeGroup = new THREE.Group();
-      threeGroup.name = mergedId;
+      threeGroup.name = first.name;
+      threeGroup.userData.partId = mergedId;
       const meshObjs = allMeshIds
         .map(mid => findObjectInScene(sceneRef.current!, mid))
         .filter((o): o is THREE.Object3D => o !== null);
@@ -943,7 +957,8 @@ export default function SegmentPage() {
     setLastClickedMeshId(groupId);
     if (sceneRef.current) {
       const threeGroup = new THREE.Group();
-      threeGroup.name = groupId;
+      threeGroup.name = `Group (${selected.length})`;
+      threeGroup.userData.partId = groupId;
       const childMeshIds = selected.flatMap(p => p.meshIds);
       const meshObjs = childMeshIds
         .map(mid => findObjectInScene(sceneRef.current!, mid))
