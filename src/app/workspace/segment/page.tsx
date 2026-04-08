@@ -1208,7 +1208,8 @@ export default function SegmentPage() {
         for (const part of newParts) {
           if (!part.isGroup || !part.childIds || part.childIds.length < 2) continue;
           const threeGroup = new THREE.Group();
-          threeGroup.name = part.id;
+          threeGroup.name = part.name;
+          threeGroup.userData.partId = part.id;
           const childMeshIds = part.childIds.flatMap(
             (cid) => newParts.find((p) => p.id === cid)?.meshIds ?? [],
           );
