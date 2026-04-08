@@ -995,6 +995,16 @@ export default function SegmentPage() {
 
   const handleRenamePart = useCallback((id: string, name: string) => {
     setParts((prev) => prev.map((p) => (p.id === id ? { ...p, name } : p)));
+
+    // Sync to Three.js scene: find the object by partId and update its name
+    const scene = sceneRef.current;
+    if (scene) {
+      scene.traverse((child) => {
+        if (child.userData.partId === id) {
+          child.name = name;
+        }
+      });
+    }
   }, [setParts]);
 
   // ── Save ─────────────────────────────────────────────────────────────────
