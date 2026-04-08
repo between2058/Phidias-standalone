@@ -7,6 +7,8 @@ import { cn } from '@/lib/utils';
 import SegmentAIPanel from '@/components/segment/SegmentAIPanel';
 import type { P3SAMParams, SegmentResult } from '@/components/segment/SegmentAIPanel';
 import ExportDropdown from '@/components/shared/ExportDropdown';
+import RenderModeSelector from '@/components/shared/RenderModeSelector';
+import type { RenderMode } from '@/components/shared/ThreeViewport';
 
 import type { TransformValues } from '@/components/shared/TransformPanel';
 import type { HierarchyItem } from '@/components/shared/HierarchyPanel';
@@ -410,6 +412,9 @@ export default function SegmentPage() {
   // Keep a stable ref to rebuildThreeScene so the temporal subscriber (below)
   // can call the latest version without being a stale closure.
   const rebuildRef = useRef<(parts: Part[]) => void>(() => { });
+
+  // ── Render mode: textured / solid / wireframe / normal ──
+  const [renderMode, setRenderMode] = useState<RenderMode>('textured');
 
   // ── View mode: 'original' shows native materials, 'colored' shows palette ──
   // Initialize from store: if parts already have colors (e.g. tab switch), start in 'colored'.
@@ -1315,11 +1320,19 @@ export default function SegmentPage() {
             generatingLabel="Segmenting"
             onThumbnailReady={(dataUrl) => { if (activeAssetId) updateAssetThumbnail(activeAssetId, dataUrl); }}
             onHasSkinnedMesh={(v) => { if (activeAssetId) updateAsset(activeAssetId, { hasSkinnedMesh: v }); }}
+            renderMode={renderMode}
             colorViewMode={!isSegmenting ? viewMode : undefined}
             onColorViewModeChange={handleViewModeChange}
             className="w-full h-full"
           />
         </Suspense>
+
+        <RenderModeSelector
+          availableModes={['textured', 'solid', 'wireframe', 'normal']}
+          current={renderMode}
+          onChange={setRenderMode}
+          className="absolute top-3 left-3 z-10"
+        />
 
         {/* Bottom Toolbar */}
         <div
