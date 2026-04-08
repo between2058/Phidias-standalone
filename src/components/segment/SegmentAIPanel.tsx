@@ -134,6 +134,7 @@ interface SegmentAIPanelProps {
   onCancel: () => void;
   onSmartOrganize?: () => void;
   isOrganizing?: boolean;
+  hasMultipleParts?: boolean;
 }
 
 export default function SegmentAIPanel({
@@ -146,6 +147,7 @@ export default function SegmentAIPanel({
   onCancel,
   onSmartOrganize,
   isOrganizing,
+  hasMultipleParts,
 }: SegmentAIPanelProps) {
   const [params, setParams] = useState<P3SAMParams>(DEFAULT_PARAMS);
 
@@ -402,7 +404,7 @@ export default function SegmentAIPanel({
       </div>
 
       {/* ── Smart Organize ─────────────────────────────────────────────── */}
-      {results.length > 0 && !isSegmenting && onSmartOrganize && (
+      {(results.length > 0 || hasMultipleParts) && !isSegmenting && onSmartOrganize && (
         <div
           className="flex-shrink-0 p-3 border-t"
           style={{ borderColor: '#333355' }}

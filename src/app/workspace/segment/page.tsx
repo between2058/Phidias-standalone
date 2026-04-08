@@ -1294,6 +1294,11 @@ export default function SegmentPage() {
 
   const modelLoaded = parts.length > 0;
 
+  const hasMultipleParts = useMemo(
+    () => parts.filter((p) => !p.isGroup).length > 1,
+    [parts],
+  );
+
   return (
     <div className="flex h-full overflow-hidden relative" style={{ background: '#1a1a2e' }}>
 
@@ -1314,6 +1319,7 @@ export default function SegmentPage() {
             onCancel={handleCancelSegmentation}
             onSmartOrganize={handleSmartOrganize}
             isOrganizing={isOrganizing}
+            hasMultipleParts={hasMultipleParts}
           />
         </div>
       </aside>
