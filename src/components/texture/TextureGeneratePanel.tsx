@@ -15,8 +15,8 @@ interface TextureGeneratePanelProps {
   progress: ProgressUpdate | null;
   /** Whether a model is currently loaded in the viewport */
   hasActiveModel: boolean;
-  /** Original source image URL used to generate the model (if available) */
-  sourceImageUrl?: string;
+  /** Preview URL of the Qwen-styled reference image */
+  text2ImgPreviewUrl?: string | null;
 }
 
 const RESOLUTION_OPTIONS = [
@@ -147,7 +147,7 @@ export default function TextureGeneratePanel({
   isGenerating,
   progress,
   hasActiveModel,
-  sourceImageUrl,
+  text2ImgPreviewUrl,
 }: TextureGeneratePanelProps) {
   const [mode, setMode] = useState<'image' | 'text'>('image');
 
@@ -269,14 +269,28 @@ export default function TextureGeneratePanel({
               style={{ background: '#0E243E' }}
             >
               <div className="flex items-center gap-2 font-medium text-[#D5B451]">
-                <span>✏️</span> Text → Qwen → Reference → TRELLIS.2
+                <span>✏️</span> Viewport Screenshot → Qwen Edit → TRELLIS.2
               </div>
               <p className="leading-relaxed">
-                {sourceImageUrl
-                  ? 'Original generation image found — will be used as base for Qwen style transfer.'
-                  : 'No source image — a viewport render will be captured as base.'}
+                A screenshot of the current viewport will be captured and styled by Qwen based on your prompt, then used as reference for texturing.
               </p>
             </div>
+
+            {/* Qwen preview */}
+            {text2ImgPreviewUrl && (
+              <div className="rounded-lg overflow-hidden border border-[#333355]">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={text2ImgPreviewUrl}
+                  alt="Styled reference"
+                  className="w-full object-cover"
+                  style={{ maxHeight: '160px' }}
+                />
+                <div className="text-[10px] text-[#94a3b8] bg-black/50 px-2 py-1 text-center">
+                  Styled Reference Image
+                </div>
+              </div>
+            )}
 
             {/* Prompt */}
             <div>
@@ -407,50 +421,7 @@ export default function TextureGeneratePanel({
           </div>
         </div>
 
-        {/* Advanced — Stage 3 tex_slat only */}
-        <CollapsibleSection title="Advanced Settings">
-          <div className="pt-2 space-y-2">
-            <p className="text-[10px] font-semibold text-[#D5B451] uppercase tracking-wider">
-              Stage 3 — Material Texturing
-            </p>
-            <SliderRow
-              label="Guidance Strength"
-              value={texSlat.guidance_strength}
-              min={1.0}
-              max={10.0}
-              step={0.1}
-              onChange={(v) => setTexSlat({ ...texSlat, guidance_strength: v })}
-              display={(v) => v.toFixed(1)}
-            />
-            <SliderRow
-              label="Guidance Rescale"
-              value={texSlat.guidance_rescale}
-              min={0.0}
-              max={1.0}
-              step={0.01}
-              onChange={(v) => setTexSlat({ ...texSlat, guidance_rescale: v })}
-              display={(v) => v.toFixed(2)}
-            />
-            <SliderRow
-              label="Sampling Steps"
-              value={texSlat.sampling_steps}
-              min={1}
-              max={50}
-              step={1}
-              onChange={(v) => setTexSlat({ ...texSlat, sampling_steps: v })}
-              display={(v) => String(v)}
-            />
-            <SliderRow
-              label="Rescale T"
-              value={texSlat.rescale_t}
-              min={1.0}
-              max={6.0}
-              step={0.1}
-              onChange={(v) => setTexSlat({ ...texSlat, rescale_t: v })}
-              display={(v) => v.toFixed(1)}
-            />
-          </div>
-        </CollapsibleSection>
+        {/* Advanced settings removed — Trellis.2 /texture only exposes seed, resolution, texture_size */}
       </div>
 
       {/* CTA */}
@@ -471,9 +442,7 @@ export default function TextureGeneratePanel({
               color: '#0E243E',
             }}
           >
-            {mode === 'text'
-              ? 'Generate Texture ⚡ 30'
-              : 'Generate Texture ⚡ 20'}
+            Generate Texture
           </button>
         )}
       </div>

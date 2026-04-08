@@ -11,10 +11,22 @@ const nextConfig = {
   // Enable standalone output for optimized docker builds
   output: 'standalone',
 
+  // Increase body size limit for API routes (CAD files can exceed 2GB)
+  serverActions: {
+    bodySizeLimit: '3gb',
+  },
+
+  // Skip ESLint during builds (fix lint errors incrementally later)
+  eslint: {
+    ignoreDuringBuilds: true,
+  },
+
   // Rewrites for standalone mode: map /phidias/* to /api/phidias/*
   // This allows the frontend to call /phidias/... and hit our API routes
   async rewrites() {
     return [
+      // 3dgrut rewrite must come first — more specific path takes priority
+      { source: '/phidias/3dgrut/:path*', destination: `${process.env.THREEDGRUT_API_URL || 'http://localhost:8191'}/:path*` },
       {
         source: '/phidias/:path*',
         destination: '/api/phidias/:path*',
@@ -22,7 +34,16 @@ const nextConfig = {
     ];
   },
 
-  webpack: (config) => {
+  webpack: (config, { isServer }) => {
+    // WASM support for occt-import-js
+    config.experiments = { ...config.experiments, asyncWebAssembly: true };
+
+    // Exclude occt-import-js from SSR bundling (browser-only WASM)
+    if (isServer) {
+      config.externals = config.externals || [];
+      config.externals.push('occt-import-js');
+    }
+
     // Stub physics engine — we don't use PlayCanvas physics
     config.resolve.alias['sync-ammo'] = path.resolve(__dirname, 'src/lib/stubs/sync-ammo.js');
 

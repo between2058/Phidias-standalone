@@ -44,6 +44,13 @@ const INPUT_MODES: { id: InputMode; icon: string; label: string }[] = [
 
 const TEXTURE_SIZE_OPTIONS = [512, 1024, 2048];
 
+const PIPELINE_OPTIONS: { value: '512' | '1024' | '1024_cascade' | '1536_cascade'; label: string; desc: string }[] = [
+  { value: '512', label: '512', desc: '~3s' },
+  { value: '1024', label: '1024', desc: '~17s' },
+  { value: '1024_cascade', label: '1024C', desc: '~17s' },
+  { value: '1536_cascade', label: '1536C', desc: '~60s' },
+];
+
 const DEFAULT_SS: GenerationParams = {
   guidance_strength: 7.5,
   sampling_steps: 12,
@@ -239,11 +246,13 @@ export default function ModelGeneratePanel({
 
   // ── TRELLIS.2 output params ─────────────────────────────────────────────
   const [resolution] = useState<'512' | '1024' | '1536'>('1024');
+  const [pipelineType, setPipelineType] = useState<'512' | '1024' | '1024_cascade' | '1536_cascade'>('1024_cascade');
   const [seed, setSeed] = useState(0);
   const [randomizeSeed, setRandomizeSeed] = useState(true);
   const [preprocessImage] = useState(true);
-  const [decimationTarget] = useState(500000);
-  const [textureSize, setTextureSize] = useState(2048);
+  const [decimationTarget, setDecimationTarget] = useState(1000000);
+  const [remesh, setRemesh] = useState(true);
+  const [textureSize, setTextureSize] = useState(1024);
   const [ss, setSs] = useState<GenerationParams>(DEFAULT_SS);
   const [shapSlat, setShapSlat] = useState<GenerationParams>(DEFAULT_SHAPSLAT);
 
@@ -262,10 +271,12 @@ export default function ModelGeneratePanel({
 
     const common = {
       resolution,
+      pipelineType,
       seed: randomizeSeed ? 0 : seed,
       randomizeSeed,
       preprocessImage,
       decimationTarget,
+      remesh,
       textureSize,
       ss,
       shapSlat,
@@ -585,6 +596,33 @@ export default function ModelGeneratePanel({
                         </div>
                     </div> */}
 
+          {/* Pipeline Type */}
+          <div>
+            <p className="text-xs text-[#e2e8f0] mb-1">Pipeline</p>
+            <div className="flex gap-1">
+              {PIPELINE_OPTIONS.map((opt) => (
+                <button
+                  key={opt.value}
+                  onClick={() => setPipelineType(opt.value)}
+                  className={cn(
+                    'flex-1 flex flex-col items-center py-1.5 rounded-lg text-[10px] transition-colors',
+                    pipelineType === opt.value
+                      ? 'text-white'
+                      : 'bg-[#252542] text-[#94a3b8] hover:bg-[#2a2a4a]',
+                  )}
+                  style={
+                    pipelineType === opt.value
+                      ? { background: '#0E243E', border: '1px solid #D5B451' }
+                      : {}
+                  }
+                >
+                  <span className="font-mono font-bold">{opt.label}</span>
+                  <span className="text-[8px] opacity-60">{opt.desc}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+
           {/* Seed */}
           <div>
             <div className="flex items-center justify-between mb-1">
@@ -638,6 +676,35 @@ export default function ModelGeneratePanel({
             </div>
           </div>
         </div>
+
+          {/* Decimation Target */}
+          <div>
+            <div className="flex items-center justify-between mb-1">
+              <span className="text-xs text-[#e2e8f0]">Max Faces</span>
+              <span className="text-[10px] text-[#94a3b8] font-mono">
+                {(decimationTarget / 1000).toFixed(0)}K
+              </span>
+            </div>
+            <input
+              type="range"
+              min={50000}
+              max={2000000}
+              step={50000}
+              value={decimationTarget}
+              onChange={(e) => setDecimationTarget(parseInt(e.target.value))}
+              className="w-full h-1 rounded-full appearance-none bg-[#333355] accent-[#D5B451]"
+            />
+          </div>
+
+          {/* Remesh */}
+          <div className="flex items-center justify-between">
+            <span className="text-xs text-[#e2e8f0]">Remesh</span>
+            <Toggle
+              label=""
+              checked={remesh}
+              onChange={setRemesh}
+            />
+          </div>
 
         {/* Advanced: per-stage TRELLIS.2 sliders */}
         <CollapsibleSection title="Advanced Settings">

@@ -378,6 +378,155 @@ export async function generateReconSingle(
   return data;
 }
 
+// ============================================================================
+// Trellis.2 Generation (single image → 3D)
+// ============================================================================
+
+export async function generateTrellis(
+  file: File | Blob,
+  params: {
+    seed?: number;
+    pipeline_type?: '512' | '1024' | '1024_cascade' | '1536_cascade';
+    texture_size?: number;
+    decimation_target?: number;
+    remesh?: boolean;
+    ss_guidance_strength?: number;
+    ss_sampling_steps?: number;
+    slat_guidance_strength?: number;
+    slat_sampling_steps?: number;
+  } = {},
+): Promise<ReconViaGenOutput> {
+  const formData = new FormData();
+  formData.append('file', file);
+  if (params.seed !== undefined) formData.append('seed', String(params.seed));
+  if (params.pipeline_type !== undefined)
+    formData.append('pipeline_type', params.pipeline_type);
+  if (params.texture_size !== undefined)
+    formData.append('texture_size', String(params.texture_size));
+  if (params.decimation_target !== undefined)
+    formData.append('decimation_target', String(params.decimation_target));
+  if (params.remesh !== undefined)
+    formData.append('remesh', String(params.remesh));
+  if (params.ss_guidance_strength !== undefined)
+    formData.append('ss_guidance_strength', String(params.ss_guidance_strength));
+  if (params.ss_sampling_steps !== undefined)
+    formData.append('ss_sampling_steps', String(params.ss_sampling_steps));
+  if (params.slat_guidance_strength !== undefined)
+    formData.append('slat_guidance_strength', String(params.slat_guidance_strength));
+  if (params.slat_sampling_steps !== undefined)
+    formData.append('slat_sampling_steps', String(params.slat_sampling_steps));
+
+  const { data } = await client.post<ReconViaGenOutput>(
+    `${getBackendApi()}/phidias/trellis2/generate`,
+    formData,
+    {
+      headers: { 'Content-Type': 'multipart/form-data' },
+      timeout: 300000,
+    },
+  );
+  return data;
+}
+
+/**
+ * Texture an existing mesh using a reference image via Trellis.2.
+ */
+export async function textureTrellis(
+  referenceImage: File | Blob,
+  meshFile: File | Blob,
+  params: {
+    seed?: number;
+    resolution?: number;
+    texture_size?: number;
+  } = {},
+): Promise<ReconViaGenOutput> {
+  const formData = new FormData();
+  // Ensure blobs have correct MIME type and filename for FastAPI validation
+  const imgBlob = new File(
+    [referenceImage],
+    'reference.png',
+    { type: referenceImage.type || 'image/png' },
+  );
+  const glbBlob = new File(
+    [meshFile],
+    'model.glb',
+    { type: meshFile.type || 'model/gltf-binary' },
+  );
+  formData.append('file', imgBlob, 'reference.png');
+  formData.append('mesh_file', glbBlob, 'model.glb');
+  if (params.seed !== undefined) formData.append('seed', String(params.seed));
+  if (params.resolution !== undefined)
+    formData.append('resolution', String(params.resolution));
+  if (params.texture_size !== undefined)
+    formData.append('texture_size', String(params.texture_size));
+
+  const { data } = await client.post<ReconViaGenOutput>(
+    `${getBackendApi()}/phidias/trellis2/texture`,
+    formData,
+    {
+      headers: { 'Content-Type': 'multipart/form-data' },
+      timeout: 300000,
+    },
+  );
+  return data;
+}
+
+// ============================================================================
+// CAD — OCCT Server Integration
+// ============================================================================
+
+export interface CADImportResponse {
+  session_id: string;
+  root: Record<string, unknown>;
+  meshes: Record<string, unknown>[];
+}
+
+export interface CADDedupGroup {
+  hash: string;
+  name: string;
+  mesh_indices: number[];
+  count: number;
+}
+
+export interface CADDedupResponse {
+  groups: CADDedupGroup[];
+  total_parts: number;
+  unique_parts: number;
+  duplicate_parts: number;
+}
+
+/**
+ * Import a STEP/IGES/BREP file via OCCT server (for large files >50MB).
+ */
+export async function cadImport(
+  file: File | Blob,
+): Promise<CADImportResponse> {
+  const formData = new FormData();
+  formData.append('file', file, (file as File).name || 'model.stp');
+
+  const { data } = await client.post<CADImportResponse>(
+    `${getBackendApi()}/phidias/occt/import`,
+    formData,
+    {
+      headers: { 'Content-Type': 'multipart/form-data' },
+      timeout: 600000,
+    },
+  );
+  return data;
+}
+
+/**
+ * Find duplicate parts in a server-imported CAD model.
+ */
+export async function cadDedup(
+  sessionId: string,
+): Promise<CADDedupResponse> {
+  const { data } = await client.post<CADDedupResponse>(
+    `${getBackendApi()}/phidias/occt/dedup`,
+    { session_id: sessionId },
+  );
+  return data;
+}
+
 export async function generateReconMulti(
   files: File[] | Blob[],
   params: {
@@ -576,13 +725,19 @@ export async function generateText2Img(
   prompt: string,
   params: Record<string, unknown> = {},
 ): Promise<QwenText2ImgResponse> {
+  const formData = new FormData();
+  formData.append('prompt', prompt);
+  for (const [key, val] of Object.entries(params)) {
+    if (val !== undefined) formData.append(key, String(val));
+  }
+
   const { data } = await client.post<QwenText2ImgResponse>(
     `${getBackendApi()}/phidias/qwen/text2img`,
+    formData,
     {
-      prompt,
-      ...params,
+      headers: { 'Content-Type': 'multipart/form-data' },
+      timeout: 300000,
     },
-    { timeout: 300000 },
   );
 
   const requestId = data.request_id;
@@ -603,7 +758,7 @@ export async function editImage(
   params: Record<string, unknown> = {},
 ): Promise<QwenEditResponse> {
   const formData = new FormData();
-  formData.append('file', imageBlob);
+  formData.append('file', imageBlob, 'image.png');
   formData.append('prompt', prompt);
   if (params.steps !== undefined)
     formData.append('steps', String(params.steps));

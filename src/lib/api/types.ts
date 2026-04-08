@@ -44,12 +44,14 @@ export interface GenerateModelRequest {
 
   // TRELLIS.2 core params
   resolution: '512' | '1024' | '1536';
+  pipelineType: '512' | '1024' | '1024_cascade' | '1536_cascade';
   seed: number;
   randomizeSeed: boolean;
   preprocessImage: boolean;
 
   // GLB export params
   decimationTarget: number;
+  remesh: boolean;
   textureSize: number;
 
   // Stage 1: Sparse Structure Generation

@@ -47,6 +47,7 @@ export interface SceneGraphSlot {
   onMultiSelect: (id: string) => void;
   onVisibilityToggle: (id: string, visible: boolean) => void;
   onTransformChange: (t: TransformValues) => void;
+  onRename?: (id: string, name: string) => void;
 }
 
 // ─── Context value ────────────────────────────────────────────────────────────

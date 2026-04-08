@@ -37,7 +37,7 @@ import ScenePage from './app/workspace/_scene/page';
 import SegmentPage from './app/workspace/segment/page';
 
 // Lazy‑loaded pages
-const TexturePage = React.lazy(() => import('./app/workspace/_texture/page'));
+const TexturePage = React.lazy(() => import('./app/workspace/texture/page'));
 const RetopoPage = React.lazy(() => import('./app/workspace/_retopo/page'));
 const WorldPage = React.lazy(() => import('./app/workspace/_world/page'));
 const PhysicsPage = React.lazy(() => import('./app/workspace/_physics/page'));

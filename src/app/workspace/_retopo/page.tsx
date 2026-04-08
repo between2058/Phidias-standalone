@@ -43,17 +43,12 @@ export default function RetopoPage() {
       setIsProcessing(true);
       setProgress({ percent: 0, stage: 'Starting...' });
       const result = await mockRetopology(
-        {
-          modelUrl: SAMPLE_GLB,
-          topology: topology as 'quad' | 'triangle',
-          targetFaces,
-          preserveUV: true,
-        },
-        (update) => setProgress(update),
+        SAMPLE_GLB,
+        (update: ProgressUpdate) => setProgress(update),
       );
       setRetopoResult({
         modelUrl: result.data.modelUrl,
-        newFaces: result.data.newFaces,
+        newFaces: result.data.faces,
       });
       setViewMode('Split');
       setIsProcessing(false);

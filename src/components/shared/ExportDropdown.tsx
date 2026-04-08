@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect } from 'react';
 import type { MutableRefObject } from 'react';
 import * as THREE from 'three';
-import { Upload, Box, ChevronDown, Globe } from 'lucide-react';
+import { Upload, Box, ChevronDown, Globe, FileBox } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useWorkspace } from '@/lib/workspace-context';
 
@@ -94,6 +94,65 @@ async function downloadUsdz(modelUrl: string, baseName: string) {
   setTimeout(() => URL.revokeObjectURL(url), 5000);
 }
 
+/** Restore original materials on a scene, run an async task, then put them back. */
+async function withOriginalMaterials<T>(scene: THREE.Group, fn: () => Promise<T>): Promise<T> {
+  const overrides: { mesh: THREE.Mesh; coloredMat: THREE.Material | THREE.Material[] }[] = [];
+  scene.traverse((child) => {
+    if (child instanceof THREE.Mesh && child.userData.__origMaterial) {
+      overrides.push({ mesh: child, coloredMat: child.material });
+      child.material = child.userData.__origMaterial;
+    }
+  });
+  try {
+    return await fn();
+  } finally {
+    for (const { mesh, coloredMat } of overrides) {
+      mesh.material = coloredMat;
+    }
+  }
+}
+
+/** Load the GLB via GLTFLoader then convert to OBJ with OBJExporter. */
+async function downloadObj(modelUrl: string, baseName: string) {
+  const { GLTFLoader } = await import('three/examples/jsm/loaders/GLTFLoader.js');
+  const { OBJExporter } = await import('three/examples/jsm/exporters/OBJExporter.js');
+
+  const gltf = await new Promise<{ scene: THREE.Group }>((resolve, reject) => {
+    new GLTFLoader().load(modelUrl, resolve, undefined, reject);
+  });
+
+  const exporter = new OBJExporter();
+  const result = exporter.parse(gltf.scene);
+  const blob = new Blob([result], { type: 'text/plain' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `${baseName}.obj`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 5000);
+}
+
+/** Export the live Three.js scene and download as OBJ. */
+async function downloadObjFromScene(scene: THREE.Group, baseName: string) {
+  const result = await withOriginalMaterials(scene, async () => {
+    const { OBJExporter } = await import('three/examples/jsm/exporters/OBJExporter.js');
+    const exporter = new OBJExporter();
+    return exporter.parse(scene);
+  });
+
+  const blob = new Blob([result], { type: 'text/plain' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `${baseName}.obj`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 5000);
+}
+
 /** Export the live Three.js scene and download as USDZ. */
 async function downloadUsdzFromScene(scene: THREE.Group, baseName: string) {
   // Swap segment-color materials → original materials
@@ -148,7 +207,7 @@ export default function ExportDropdown({ className, sceneRef }: ExportDropdownPr
 
   const baseName = activeAsset?.name.replace(/\.[^/.]+$/, '') ?? 'model';
 
-  async function handleExport(format: 'glb' | 'usdz') {
+  async function handleExport(format: 'glb' | 'usdz' | 'obj') {
     if (!activeAsset?.modelUrl || working) return;
     setWorking(true);
     setOpen(false);
@@ -159,6 +218,12 @@ export default function ExportDropdown({ className, sceneRef }: ExportDropdownPr
           await downloadGlbFromScene(liveScene, baseName);
         } else {
           downloadGlb(activeAsset.modelUrl, baseName);
+        }
+      } else if (format === 'obj') {
+        if (liveScene) {
+          await downloadObjFromScene(liveScene, baseName);
+        } else {
+          await downloadObj(activeAsset.modelUrl, baseName);
         }
       } else {
         if (liveScene) {
@@ -224,6 +289,19 @@ export default function ExportDropdown({ className, sceneRef }: ExportDropdownPr
               <div className="text-xs font-medium text-text-primary mb-0.5">.glb (default)</div>
               <div className="text-[11px] text-text-tertiary leading-tight">
                 Binary glTF
+              </div>
+            </div>
+          </button>
+
+          <button
+            className="w-full flex items-start gap-3 px-4 py-3 hover:bg-bg-hover transition-colors text-left"
+            onClick={() => handleExport('obj')}
+          >
+            <span className="mt-0.5 shrink-0 text-text-secondary"><FileBox size={14} /></span>
+            <div className="min-w-0">
+              <div className="text-xs font-medium text-text-primary mb-0.5">.obj</div>
+              <div className="text-[11px] text-text-tertiary leading-tight">
+                Wavefront OBJ
               </div>
             </div>
           </button>

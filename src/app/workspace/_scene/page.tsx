@@ -81,7 +81,7 @@ export default function ScenePage() {
         setIsProcessing(true);
         setProcessingStages(GENERATE_STAGES);
         setProgress({ percent: 0, stage: 'Starting…' });
-        await mockGenerateScene((u) => setProgress(u));
+        await mockGenerateScene(undefined, (u: ProgressUpdate) => setProgress(u));
         handleLoadScene(SAMPLE_PLY);
         setIsProcessing(false);
         setProgress(null);

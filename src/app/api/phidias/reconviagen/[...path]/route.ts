@@ -29,13 +29,13 @@ export async function POST(
     return proxyRequest(request, targetUrl);
   }
 
-  // For generation endpoints, we need to map the response to match Phidias Python Router
+  // For generation endpoints, map the response to match Phidias schema
   const response = await proxyRequest(request, targetUrl);
   if (!response.ok) return response;
 
   const data = await response.json();
 
-  // Extract request_id from glb_file path if possible, just like Python does
+  // Extract request_id from glb_file path if possible
   const glbFile = data.glb_file || '';
   const pathParts = glbFile.split('/');
   const requestId = (glbFile.startsWith('/download/') && pathParts.length >= 4) ? pathParts[2] : '';

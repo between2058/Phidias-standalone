@@ -31,6 +31,7 @@ import { cn } from '@/lib/utils';
 import { usePhidiasStore } from '@/store/phidias-store';
 import UploadToPegaverseModal from './UploadToPegaverseModal';
 import { usePathname } from 'next/navigation';
+import { isConvertibleFormat, convertToGlb } from '@/lib/three/convert-to-glb';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -908,9 +909,32 @@ export default function AssetsPanel({ defaultTab = 'assets' }: { defaultTab?: Pa
     exitManageMode();
   };
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    e.target.value = '';
+
+    if (isConvertibleFormat(file.name)) {
+      const id = addAsset({
+        name: file.name.replace(/\.[^.]+$/, ''),
+        modelUrl: '',
+        type: 'untextured',
+        status: 'generating',
+        fileSize: file.size,
+        pipelineUsed: 'uploaded',
+      });
+      setActiveAssetId(id);
+      try {
+        const glbBlob = await convertToGlb(file);
+        const glbUrl = URL.createObjectURL(glbBlob);
+        updateAsset(id, { modelUrl: glbUrl, status: 'ready' });
+      } catch (err) {
+        console.error('[AssetsPanel] conversion failed:', err);
+        updateAsset(id, { status: 'failed' });
+      }
+      return;
+    }
+
     const url = URL.createObjectURL(file);
     const id = addAsset({
       name: file.name.replace(/\.[^.]+$/, ''),
@@ -921,7 +945,6 @@ export default function AssetsPanel({ defaultTab = 'assets' }: { defaultTab?: Pa
       pipelineUsed: 'uploaded',
     });
     setActiveAssetId(id);
-    e.target.value = '';
   };
 
   // ── Drag & Drop ──────────────────────────────────────────────────────────
@@ -937,14 +960,43 @@ export default function AssetsPanel({ defaultTab = 'assets' }: { defaultTab?: Pa
     }
   }, []);
 
-  const handleDrop = useCallback((e: React.DragEvent) => {
+  const handleDrop = useCallback(async (e: React.DragEvent) => {
     e.preventDefault();
     setIsDragOver(false);
     const file = e.dataTransfer.files[0];
     if (!file) return;
-    const allowed = ['.glb', '.gltf', '.obj', '.fbx', '.stl', '.ply', '.usdz'];
+    const allowed = ['.glb', '.gltf', '.obj', '.fbx', '.stl', '.ply', '.usdz', '.stp', '.step', '.iges', '.igs', '.brep', '.brp'];
     const ext = file.name.substring(file.name.lastIndexOf('.')).toLowerCase();
     if (!allowed.includes(ext)) return;
+
+    // CAD files need special handling via the CAD page's import pipeline
+    const cadExts = ['.stp', '.step', '.iges', '.igs', '.brep', '.brp'];
+    if (cadExts.includes(ext)) {
+      window.dispatchEvent(new CustomEvent('phidias:cad-file-upload', { detail: file }));
+      return;
+    }
+
+    if (isConvertibleFormat(file.name)) {
+      const id = addAsset({
+        name: file.name.replace(/\.[^.]+$/, ''),
+        modelUrl: '',
+        type: 'untextured',
+        status: 'generating',
+        fileSize: file.size,
+        pipelineUsed: 'uploaded',
+      });
+      setActiveAssetId(id);
+      try {
+        const glbBlob = await convertToGlb(file);
+        const glbUrl = URL.createObjectURL(glbBlob);
+        updateAsset(id, { modelUrl: glbUrl, status: 'ready' });
+      } catch (err) {
+        console.error('[AssetsPanel] conversion failed:', err);
+        updateAsset(id, { status: 'failed' });
+      }
+      return;
+    }
+
     const url = URL.createObjectURL(file);
     const id = addAsset({
       name: file.name.replace(/\.[^.]+$/, ''),
@@ -955,7 +1007,7 @@ export default function AssetsPanel({ defaultTab = 'assets' }: { defaultTab?: Pa
       pipelineUsed: 'uploaded',
     });
     setActiveAssetId(id);
-  }, [addAsset, setActiveAssetId]);
+  }, [addAsset, setActiveAssetId, updateAsset]);
 
   // ── Context Menu Actions ──────────────────────────────────────────────────
 
