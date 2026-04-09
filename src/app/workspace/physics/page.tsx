@@ -6,6 +6,7 @@ import { useWorkspace } from '@/lib/workspace-context';
 import type { HierarchyItem } from '@/components/shared/HierarchyPanel';
 import { usePhysicsStore } from '@/store/physics-store';
 import type { PhysicsPart } from '@/store/physics-store';
+import { useSegmentStore } from '@/store/segment-store';
 import RenderModeSelector from '@/components/shared/RenderModeSelector';
 import type { RenderMode } from '@/components/shared/ThreeViewport';
 import PhysicsEditorPanel from '@/components/physics/PhysicsEditorPanel';
@@ -215,24 +216,38 @@ export default function PhysicsPage() {
       '#f97316', '#a855f7', '#14b8a6', '#eab308',
     ];
 
-    const newParts: PhysicsPart[] = meshes.map((m, i) => ({
-      id: m.id,
-      name: m.name || `Part_${i}`,
-      color: PHYSICS_PALETTE[i % PHYSICS_PALETTE.length],
-      type: 'link' as const,
-      role: 'other' as const,
-      mobility: 'fixed' as const,
-      mass: null,
-      density: 1000,
-      collisionType: 'convexHull' as const,
-      staticFriction: 0.5,
-      dynamicFriction: 0.3,
-      restitution: 0.3,
-      materialId: null,
-      isMaterialCustom: false,
-      originalMaterial: null,
-      vertexCount: 0,
-    }));
+    // Check segment store for user-edited names/colors (from rename, merge, group)
+    const segParts = useSegmentStore.getState().parts;
+    // Build lookup: meshId → segment part (a segment part can own multiple meshIds via merge)
+    const meshToSegPart = new Map<string, { name: string; color: string }>();
+    for (const sp of segParts) {
+      if (sp.isGroup) continue; // skip group folders
+      for (const mid of sp.meshIds) {
+        meshToSegPart.set(mid, { name: sp.name, color: sp.color });
+      }
+    }
+
+    const newParts: PhysicsPart[] = meshes.map((m, i) => {
+      const seg = meshToSegPart.get(m.id);
+      return {
+        id: m.id,
+        name: seg?.name || m.name || `Part_${i}`,
+        color: seg?.color || PHYSICS_PALETTE[i % PHYSICS_PALETTE.length],
+        type: 'link' as const,
+        role: 'other' as const,
+        mobility: 'fixed' as const,
+        mass: null,
+        density: 1000,
+        collisionType: 'convexHull' as const,
+        staticFriction: 0.5,
+        dynamicFriction: 0.3,
+        restitution: 0.3,
+        materialId: null,
+        isMaterialCustom: false,
+        originalMaterial: null,
+        vertexCount: 0,
+      };
+    });
 
     setParts(newParts);
     usePhysicsStore.temporal.getState().clear();
