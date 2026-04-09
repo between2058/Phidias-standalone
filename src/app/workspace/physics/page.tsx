@@ -7,6 +7,7 @@ import { usePhysicsStore } from '@/store/physics-store';
 import RenderModeSelector from '@/components/shared/RenderModeSelector';
 import type { RenderMode } from '@/components/shared/ThreeViewport';
 import PhysicsEditorPanel from '@/components/physics/PhysicsEditorPanel';
+import JointVisualizer from '@/components/physics/JointVisualizer';
 
 const ThreeViewport = dynamic(
   () => import('@/components/shared/ThreeViewport'),
@@ -187,7 +188,9 @@ export default function PhysicsPage() {
                 updateAsset(activeAssetId, { hasSkinnedMesh: v });
             }}
             className="w-full h-full"
-          />
+          >
+            <JointVisualizer />
+          </ThreeViewport>
         </Suspense>
 
         {/* Render mode selector */}
