@@ -9,6 +9,7 @@ import type { RenderMode } from '@/components/shared/ThreeViewport';
 import PhysicsEditorPanel from '@/components/physics/PhysicsEditorPanel';
 import JointVisualizer from '@/components/physics/JointVisualizer';
 import AnchorGizmo from '@/components/physics/AnchorGizmo';
+import MotionPreviewController from '@/components/physics/MotionPreviewController';
 
 const ThreeViewport = dynamic(
   () => import('@/components/shared/ThreeViewport'),
@@ -192,6 +193,7 @@ export default function PhysicsPage() {
           >
             <JointVisualizer />
             <AnchorGizmo />
+            <MotionPreviewController />
           </ThreeViewport>
         </Suspense>
 
