@@ -1297,12 +1297,53 @@ export default function SegmentPage() {
 
   const modelLoaded = parts.length > 0;
 
-  const handleSendToPhysics = useCallback(() => {
-    if (!activeAsset?.modelUrl) return;
-    const hierarchy = partsToHierarchyItems(parts);
-    setPendingPhysicsData({ modelUrl: activeAsset.modelUrl, hierarchy });
-    router.push('/workspace/physics');
-  }, [activeAsset?.modelUrl, parts, setPendingPhysicsData, router]);
+  const handleSendToPhysics = useCallback(async () => {
+    if (!activeAsset?.modelUrl || !sceneRef.current || !activeAssetId) return;
+
+    // Auto-save before navigating: export live scene to update asset modelUrl
+    // so Physics tab loads the latest mesh structure (renames, merges, etc.)
+    try {
+      setIsSaving(true);
+      const scene = sceneRef.current;
+
+      // Temporarily restore original materials for clean GLB export
+      const overrides: { mesh: THREE.Mesh; coloredMat: THREE.Material | THREE.Material[] }[] = [];
+      scene.traverse((child) => {
+        if (child instanceof THREE.Mesh && child.userData.__origMaterial) {
+          overrides.push({ mesh: child, coloredMat: child.material });
+          child.material = child.userData.__origMaterial;
+        }
+      });
+
+      const exporter = new GLTFExporter();
+      const glb = await new Promise<ArrayBuffer>((resolve, reject) => {
+        exporter.parse(
+          scene,
+          (result) => resolve(result as ArrayBuffer),
+          (err) => reject(err),
+          { binary: true }
+        );
+      });
+
+      // Restore segment-color materials
+      for (const { mesh, coloredMat } of overrides) {
+        mesh.material = coloredMat;
+      }
+
+      const blob = new Blob([glb], { type: 'model/gltf-binary' });
+      const url = URL.createObjectURL(blob);
+      updateAsset(activeAssetId, { modelUrl: url, pipelineUsed: 'segment' });
+
+      // Navigate with updated asset
+      const hierarchy = partsToHierarchyItems(parts);
+      setPendingPhysicsData({ modelUrl: url, hierarchy });
+      router.push('/workspace/physics');
+    } catch (err) {
+      console.error('[SendToPhysics] Auto-save failed:', err);
+    } finally {
+      setIsSaving(false);
+    }
+  }, [activeAsset?.modelUrl, activeAssetId, parts, setPendingPhysicsData, router, updateAsset]);
 
   const hasMultipleParts = useMemo(
     () => parts.filter((p) => !p.isGroup).length > 1,
