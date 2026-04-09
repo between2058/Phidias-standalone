@@ -40,7 +40,7 @@ import SegmentPage from './app/workspace/segment/page';
 const TexturePage = React.lazy(() => import('./app/workspace/texture/page'));
 const RetopoPage = React.lazy(() => import('./app/workspace/_retopo/page'));
 const WorldPage = React.lazy(() => import('./app/workspace/_world/page'));
-const PhysicsPage = React.lazy(() => import('./app/workspace/_physics/page'));
+const PhysicsPage = React.lazy(() => import('./app/workspace/physics/page'));
 const AgentPage = React.lazy(() => import('./app/agent/page'));
 
 // ── WorkspaceLayoutRoute ──────────────────────────────────────────────────────

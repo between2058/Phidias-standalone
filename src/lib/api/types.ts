@@ -166,6 +166,71 @@ export interface Joint {
   limits?: { lower: number; upper: number };
 }
 
+// ─── Articulation Service Types ────────────────────────────────────────────
+
+export interface ParsedPhysicsPart {
+  id: string;
+  name: string;
+  vertex_count: number;
+  face_count: number;
+  bounds_min: [number, number, number];
+  bounds_max: [number, number, number];
+  is_watertight: boolean;
+  material: {
+    baseColorFactor: [number, number, number, number] | null;
+    baseColorTextureId: string | null;
+    metallicFactor: number;
+    roughnessFactor: number;
+    normalTextureId: string | null;
+  } | null;
+}
+
+export interface ParsedPhysicsResult {
+  parts: ParsedPhysicsPart[];
+  model_url: string;
+}
+
+export interface ArticulationExportPart {
+  id: string;
+  name: string;
+  type: 'link' | 'base' | 'tool' | 'joint';
+  mass: number | null;
+  density: number;
+  collision_type: 'convexHull' | 'mesh' | 'convexDecomposition' | 'none';
+  static_friction: number;
+  dynamic_friction: number;
+  restitution: number;
+}
+
+export interface ArticulationExportJoint {
+  name: string;
+  parent: string;
+  child: string;
+  type: 'fixed' | 'revolute' | 'prismatic';
+  axis: [number, number, number];
+  anchor: [number, number, number];
+  lower_limit: number | null;
+  upper_limit: number | null;
+  drive_stiffness: number | null;
+  drive_damping: number | null;
+  drive_max_force: number | null;
+  drive_type: 'position' | 'velocity' | 'none';
+  disable_collision: boolean;
+}
+
+export interface ArticulationExportData {
+  glb_file: File;
+  model_name: string;
+  parts: ArticulationExportPart[];
+  joints: ArticulationExportJoint[];
+}
+
+export interface ArticulationExportResult {
+  success: boolean;
+  filename: string;
+  download_url: string;
+}
+
 export interface HierarchyItem {
   id: string;
   name: string;

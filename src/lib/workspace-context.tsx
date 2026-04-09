@@ -75,6 +75,10 @@ interface WorkspaceContextValue {
   // remain visible in the Scene Graph panel even after leaving the Segment tab
   segmentHierarchy: HierarchyItem[] | null;
   setSegmentHierarchy: (items: HierarchyItem[] | null) => void;
+
+  // Bridge: Segment → Physics tab handoff
+  pendingPhysicsData: { modelUrl: string; hierarchy: HierarchyItem[] } | null;
+  setPendingPhysicsData: (data: { modelUrl: string; hierarchy: HierarchyItem[] } | null) => void;
 }
 
 // ─── Provider ────────────────────────────────────────────────────────────────
@@ -88,6 +92,9 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
   const [sceneGraph, setSceneGraph] = useState<SceneGraphSlot | null>(null);
   const [segmentHierarchy, setSegmentHierarchy] = useState<
     HierarchyItem[] | null
+  >(null);
+  const [pendingPhysicsData, setPendingPhysicsData] = useState<
+    { modelUrl: string; hierarchy: HierarchyItem[] } | null
   >(null);
 
   const addAsset = useCallback(
@@ -145,6 +152,8 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
         setSceneGraph,
         segmentHierarchy,
         setSegmentHierarchy,
+        pendingPhysicsData,
+        setPendingPhysicsData,
       }}
     >
       {children}

@@ -2,7 +2,9 @@
 
 import React, { useRef, useState, useCallback, useEffect, useMemo, useReducer, Suspense } from 'react';
 import dynamic from 'next/dynamic';
+import { useRouter } from 'next/navigation';
 import * as THREE from 'three';
+import { Atom } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import SegmentAIPanel from '@/components/segment/SegmentAIPanel';
 import type { P3SAMParams, SegmentResult } from '@/components/segment/SegmentAIPanel';
@@ -380,8 +382,10 @@ async function splitSegmentedGlb(blob: Blob): Promise<Blob> {
 // ─── Page component ──────────────────────────────────────────────────────────
 
 export default function SegmentPage() {
-  const { setSceneGraph, setSegmentHierarchy, assets, activeAssetId, updateAsset, updateAssetThumbnail } = useWorkspace();
-  const activeModelUrl = assets.find(a => a.id === activeAssetId)?.modelUrl ?? null;
+  const { setSceneGraph, setSegmentHierarchy, setPendingPhysicsData, assets, activeAssetId, updateAsset, updateAssetThumbnail } = useWorkspace();
+  const activeAsset = assets.find(a => a.id === activeAssetId) ?? null;
+  const activeModelUrl = activeAsset?.modelUrl ?? null;
+  const router = useRouter();
 
   const sceneRef = useRef<THREE.Group | null>(null);
   const abortRef = useRef<AbortController | null>(null);
@@ -774,13 +778,16 @@ export default function SegmentPage() {
     // node re-parenting. The custom undo/redo logic (applyTransformSnapshot)
     // handles imperative transform restoration independently of Zundo.
 
-    // Sync mesh names for single-mesh parts
+    // Tag meshes with partId for lookup, but do NOT change obj.name.
+    // objectId(obj) uses obj.name as a stable key for material tracking
+    // in ThreeViewport's origMaterialsRef. Changing obj.name breaks the
+    // key mapping and causes the original texture to be permanently lost.
     targetParts.forEach((part) => {
       if (!part.isGroup && part.meshIds.length === 1) {
         const entry = registry.get(part.meshIds[0]);
         if (entry?.obj) {
-          entry.obj.name = part.name;
           entry.obj.userData.partId = part.id;
+          entry.obj.userData.displayName = part.name;
         }
       }
     });
@@ -996,15 +1003,10 @@ export default function SegmentPage() {
   const handleRenamePart = useCallback((id: string, name: string) => {
     setParts((prev) => prev.map((p) => (p.id === id ? { ...p, name } : p)));
 
-    // Sync to Three.js scene: find the object by partId and update its name
-    const scene = sceneRef.current;
-    if (scene) {
-      scene.traverse((child) => {
-        if (child.userData.partId === id) {
-          child.name = name;
-        }
-      });
-    }
+    // NOTE: We intentionally do NOT set child.name on the Three.js mesh.
+    // objectId(child) uses child.name as a stable key for material tracking
+    // in origMaterialsRef. Changing child.name breaks the key mapping and
+    // causes the original texture to be permanently lost.
   }, [setParts]);
 
   // ── Save ─────────────────────────────────────────────────────────────────
@@ -1295,6 +1297,54 @@ export default function SegmentPage() {
 
   const modelLoaded = parts.length > 0;
 
+  const handleSendToPhysics = useCallback(async () => {
+    if (!activeAsset?.modelUrl || !sceneRef.current || !activeAssetId) return;
+
+    // Auto-save before navigating: export live scene to update asset modelUrl
+    // so Physics tab loads the latest mesh structure (renames, merges, etc.)
+    try {
+      setIsSaving(true);
+      const scene = sceneRef.current;
+
+      // Temporarily restore original materials for clean GLB export
+      const overrides: { mesh: THREE.Mesh; coloredMat: THREE.Material | THREE.Material[] }[] = [];
+      scene.traverse((child) => {
+        if (child instanceof THREE.Mesh && child.userData.__origMaterial) {
+          overrides.push({ mesh: child, coloredMat: child.material });
+          child.material = child.userData.__origMaterial;
+        }
+      });
+
+      const exporter = new GLTFExporter();
+      const glb = await new Promise<ArrayBuffer>((resolve, reject) => {
+        exporter.parse(
+          scene,
+          (result) => resolve(result as ArrayBuffer),
+          (err) => reject(err),
+          { binary: true }
+        );
+      });
+
+      // Restore segment-color materials
+      for (const { mesh, coloredMat } of overrides) {
+        mesh.material = coloredMat;
+      }
+
+      const blob = new Blob([glb], { type: 'model/gltf-binary' });
+      const url = URL.createObjectURL(blob);
+      updateAsset(activeAssetId, { modelUrl: url, pipelineUsed: 'segment' });
+
+      // Navigate with updated asset
+      const hierarchy = partsToHierarchyItems(parts);
+      setPendingPhysicsData({ modelUrl: url, hierarchy });
+      router.push('/workspace/physics');
+    } catch (err) {
+      console.error('[SendToPhysics] Auto-save failed:', err);
+    } finally {
+      setIsSaving(false);
+    }
+  }, [activeAsset?.modelUrl, activeAssetId, parts, setPendingPhysicsData, router, updateAsset]);
+
   const hasMultipleParts = useMemo(
     () => parts.filter((p) => !p.isGroup).length > 1,
     [parts],
@@ -1475,6 +1525,16 @@ export default function SegmentPage() {
             ★
           </button>
           <span className="text-xs text-[#f5a623] font-bold">⚡ 55</span> */}
+          <div className="h-5 w-px bg-[#333355]" />
+          <button
+            onClick={handleSendToPhysics}
+            disabled={!activeAsset?.modelUrl || parts.length === 0}
+            className="flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium text-[#f5a623] hover:bg-[#f5a623]/10 transition-colors disabled:opacity-30"
+            title="Send to Physics"
+          >
+            <Atom size={14} />
+            Physics
+          </button>
           <ExportDropdown sceneRef={sceneRef} />
         </div>
       </main>

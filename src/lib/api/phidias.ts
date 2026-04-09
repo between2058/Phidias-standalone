@@ -1,5 +1,10 @@
 import { client } from './client';
 import { usePhidiasStore } from '../../store/phidias-store';
+import type {
+  ParsedPhysicsResult,
+  ArticulationExportData,
+  ArticulationExportResult,
+} from './types';
 
 function getBackendApi() {
   const backendApi = usePhidiasStore.getState().apiBaseUrl || '';
@@ -847,4 +852,80 @@ export async function generateAngleMulti(
       return await blobToDataURL(blob);
     }),
   );
+}
+
+// ─── Articulation Service ──────────────────────────────────────────────────
+
+export async function parseGlbForPhysics(
+  file: File,
+): Promise<ParsedPhysicsResult> {
+  const formData = new FormData();
+  formData.append('file', file);
+  const { data } = await client.post<ParsedPhysicsResult>(
+    `${getBackendApi()}/phidias/articulation/parse-glb`,
+    formData,
+    {
+      headers: { 'Content-Type': 'multipart/form-data' },
+      timeout: 60000,
+    },
+  );
+  return data;
+}
+
+export async function exportArticulationUsda(
+  exportData: ArticulationExportData,
+): Promise<ArticulationExportResult> {
+  const formData = new FormData();
+  formData.append('file', exportData.glb_file);
+  formData.append(
+    'articulation',
+    JSON.stringify({
+      model_name: exportData.model_name,
+      parts: exportData.parts,
+      joints: exportData.joints,
+    }),
+  );
+  const { data } = await client.post<ArticulationExportResult>(
+    `${getBackendApi()}/phidias/articulation/export-usda`,
+    formData,
+    {
+      headers: { 'Content-Type': 'multipart/form-data' },
+      timeout: 120000,
+    },
+  );
+  return data;
+}
+
+export async function exportArticulationUsdz(
+  exportData: ArticulationExportData,
+): Promise<ArticulationExportResult> {
+  const formData = new FormData();
+  formData.append('file', exportData.glb_file);
+  formData.append(
+    'articulation',
+    JSON.stringify({
+      model_name: exportData.model_name,
+      parts: exportData.parts,
+      joints: exportData.joints,
+    }),
+  );
+  const { data } = await client.post<ArticulationExportResult>(
+    `${getBackendApi()}/phidias/articulation/export-usdz`,
+    formData,
+    {
+      headers: { 'Content-Type': 'multipart/form-data' },
+      timeout: 120000,
+    },
+  );
+  return data;
+}
+
+export async function downloadArticulationFile(
+  filename: string,
+): Promise<Blob> {
+  const { data } = await client.get<Blob>(
+    `${getBackendApi()}/phidias/articulation/download/${filename}`,
+    { timeout: 60000 },
+  );
+  return data;
 }
