@@ -316,6 +316,12 @@ function GLBModel({
         origMaterialsRef.current.delete(oid);
       }
 
+      // Save original material before applying non-textured render mode
+      // so it can be restored when switching back to textured
+      if (renderMode !== 'textured' && !origMaterialsRef.current.has(oid)) {
+        origMaterialsRef.current.set(oid, Array.isArray(child.material) ? child.material[0] : child.material);
+      }
+
       // ── Model mode render modes (with emissive highlight) ──────────────────
       const baseMat = Array.isArray(child.material) ? child.material[0] : child.material;
 
