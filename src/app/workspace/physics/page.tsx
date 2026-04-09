@@ -3,7 +3,9 @@
 import React, { useState, useCallback, useEffect, useMemo, useReducer, Suspense } from 'react';
 import dynamic from 'next/dynamic';
 import { useWorkspace } from '@/lib/workspace-context';
+import type { HierarchyItem } from '@/components/shared/HierarchyPanel';
 import { usePhysicsStore } from '@/store/physics-store';
+import type { PhysicsPart } from '@/store/physics-store';
 import RenderModeSelector from '@/components/shared/RenderModeSelector';
 import type { RenderMode } from '@/components/shared/ThreeViewport';
 import PhysicsEditorPanel from '@/components/physics/PhysicsEditorPanel';
@@ -53,13 +55,15 @@ export type EditorTab = 'parts' | 'materials' | 'joints';
 // ─── Page ───────────────────────────────────────────────────────────────────
 
 export default function PhysicsPage() {
-  const { assets, activeAssetId, updateAssetThumbnail, updateAsset } =
+  const { assets, activeAssetId, updateAssetThumbnail, updateAsset, pendingPhysicsData, setPendingPhysicsData } =
     useWorkspace();
   const activeModelUrl =
     assets.find((a) => a.id === activeAssetId)?.modelUrl ?? null;
 
   // Store state
   const parts = usePhysicsStore((s) => s.parts);
+  const setParts = usePhysicsStore((s) => s.setParts);
+  const setJoints = usePhysicsStore((s) => s.setJoints);
   const selectedPartId = usePhysicsStore((s) => s.selectedPartId);
   const setSelectedPartId = usePhysicsStore((s) => s.setSelectedPartId);
   const setSelectedJointId = usePhysicsStore((s) => s.setSelectedJointId);
@@ -134,6 +138,51 @@ export default function PhysicsPage() {
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
   }, [handleUndo, handleRedo]);
+
+  // ── Receive pending data from Segment → Physics bridge ───────────────────
+  useEffect(() => {
+    if (!pendingPhysicsData) return;
+
+    function flattenLeafNodes(items: HierarchyItem[]): HierarchyItem[] {
+      const leaves: HierarchyItem[] = [];
+      function walk(nodes: HierarchyItem[]) {
+        for (const n of nodes) {
+          if (!n.children || n.children.length === 0) {
+            leaves.push(n);
+          } else {
+            walk(n.children);
+          }
+        }
+      }
+      walk(items);
+      return leaves;
+    }
+
+    const leafNodes = flattenLeafNodes(pendingPhysicsData.hierarchy);
+    const newParts: PhysicsPart[] = leafNodes.map((item, i, arr) => ({
+      id: item.id,
+      name: item.name || `Part_${i}`,
+      color: `hsl(${(i * 360) / arr.length}, 70%, 60%)`,
+      type: 'link' as const,
+      role: 'other' as const,
+      mobility: 'fixed' as const,
+      mass: null,
+      density: 1000,
+      collisionType: 'convexHull' as const,
+      staticFriction: 0.5,
+      dynamicFriction: 0.3,
+      restitution: 0.3,
+      materialId: null,
+      isMaterialCustom: false,
+      originalMaterial: null,
+      vertexCount: 0,
+    }));
+
+    setParts(newParts);
+    setJoints([]);
+    usePhysicsStore.temporal.getState().clear();
+    setPendingPhysicsData(null);
+  }, [pendingPhysicsData, setParts, setJoints, setPendingPhysicsData]);
 
   // ── Segment colors for colored mesh display ───────────────────────────────
   const segmentColors = useMemo(() => {

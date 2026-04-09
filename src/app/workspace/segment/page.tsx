@@ -2,7 +2,9 @@
 
 import React, { useRef, useState, useCallback, useEffect, useMemo, useReducer, Suspense } from 'react';
 import dynamic from 'next/dynamic';
+import { useRouter } from 'next/navigation';
 import * as THREE from 'three';
+import { Atom } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import SegmentAIPanel from '@/components/segment/SegmentAIPanel';
 import type { P3SAMParams, SegmentResult } from '@/components/segment/SegmentAIPanel';
@@ -380,8 +382,10 @@ async function splitSegmentedGlb(blob: Blob): Promise<Blob> {
 // ─── Page component ──────────────────────────────────────────────────────────
 
 export default function SegmentPage() {
-  const { setSceneGraph, setSegmentHierarchy, assets, activeAssetId, updateAsset, updateAssetThumbnail } = useWorkspace();
-  const activeModelUrl = assets.find(a => a.id === activeAssetId)?.modelUrl ?? null;
+  const { setSceneGraph, setSegmentHierarchy, setPendingPhysicsData, assets, activeAssetId, updateAsset, updateAssetThumbnail } = useWorkspace();
+  const activeAsset = assets.find(a => a.id === activeAssetId) ?? null;
+  const activeModelUrl = activeAsset?.modelUrl ?? null;
+  const router = useRouter();
 
   const sceneRef = useRef<THREE.Group | null>(null);
   const abortRef = useRef<AbortController | null>(null);
@@ -1295,6 +1299,13 @@ export default function SegmentPage() {
 
   const modelLoaded = parts.length > 0;
 
+  const handleSendToPhysics = useCallback(() => {
+    if (!activeAsset?.modelUrl) return;
+    const hierarchy = partsToHierarchyItems(parts);
+    setPendingPhysicsData({ modelUrl: activeAsset.modelUrl, hierarchy });
+    router.push('/workspace/physics');
+  }, [activeAsset?.modelUrl, parts, setPendingPhysicsData, router]);
+
   const hasMultipleParts = useMemo(
     () => parts.filter((p) => !p.isGroup).length > 1,
     [parts],
@@ -1475,6 +1486,16 @@ export default function SegmentPage() {
             ★
           </button>
           <span className="text-xs text-[#f5a623] font-bold">⚡ 55</span> */}
+          <div className="h-5 w-px bg-[#333355]" />
+          <button
+            onClick={handleSendToPhysics}
+            disabled={!activeAsset?.modelUrl || parts.length === 0}
+            className="flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium text-[#f5a623] hover:bg-[#f5a623]/10 transition-colors disabled:opacity-30"
+            title="Send to Physics"
+          >
+            <Atom size={14} />
+            Physics
+          </button>
           <ExportDropdown sceneRef={sceneRef} />
         </div>
       </main>
