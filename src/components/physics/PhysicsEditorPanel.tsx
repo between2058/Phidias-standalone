@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { useCallback, useRef, useState, useEffect } from 'react';
 import { ChevronDown, ChevronUp, Layers, Palette, Link2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import PhysicsExportButtons from '@/components/physics/PhysicsExportButtons';
@@ -17,10 +17,14 @@ interface PhysicsEditorPanelProps {
   onTabChange: (tab: EditorTab) => void;
   collapsed: boolean;
   onToggleCollapse: () => void;
-  height: number;
 }
 
-// ─── Tab definitions ────────────────────────────────────────────────────────
+// ─── Constants ──────────────────────────────────────────────────────────────
+
+const MIN_HEIGHT = 120;
+const MAX_HEIGHT = 600;
+const DEFAULT_HEIGHT = 280;
+const COLLAPSED_HEIGHT = 36;
 
 const TABS: { key: EditorTab; label: string; icon: React.ReactNode }[] = [
   { key: 'parts', label: 'Parts', icon: <Layers size={14} /> },
@@ -35,18 +39,66 @@ export default function PhysicsEditorPanel({
   onTabChange,
   collapsed,
   onToggleCollapse,
-  height,
 }: PhysicsEditorPanelProps) {
+  const [panelHeight, setPanelHeight] = useState(DEFAULT_HEIGHT);
+  const isDragging = useRef(false);
+  const startY = useRef(0);
+  const startHeight = useRef(0);
+
+  const handleMouseDown = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    isDragging.current = true;
+    startY.current = e.clientY;
+    startHeight.current = panelHeight;
+    document.body.style.cursor = 'ns-resize';
+    document.body.style.userSelect = 'none';
+  }, [panelHeight]);
+
+  useEffect(() => {
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!isDragging.current) return;
+      const delta = startY.current - e.clientY;
+      const newHeight = Math.min(MAX_HEIGHT, Math.max(MIN_HEIGHT, startHeight.current + delta));
+      setPanelHeight(newHeight);
+    };
+
+    const handleMouseUp = () => {
+      if (!isDragging.current) return;
+      isDragging.current = false;
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+    };
+
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mouseup', handleMouseUp);
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, []);
+
+  const displayHeight = collapsed ? COLLAPSED_HEIGHT : panelHeight;
+
   return (
     <div
-      className="flex-shrink-0 flex flex-col border-t transition-[height] duration-200 ease-in-out overflow-hidden"
+      className="flex-shrink-0 flex flex-col border-t overflow-hidden"
       style={{
-        height,
+        height: displayHeight,
         borderColor: '#333355',
         background: 'rgba(26,26,46,0.96)',
         backdropFilter: 'blur(12px)',
       }}
     >
+      {/* ── Resize handle ───────────────────────────────────────────────────── */}
+      {!collapsed && (
+        <div
+          onMouseDown={handleMouseDown}
+          className="h-1.5 flex-shrink-0 cursor-ns-resize group flex items-center justify-center"
+        >
+          <div className="w-10 h-0.5 rounded-full bg-[#333355] group-hover:bg-[#7c3aed]/60 transition-colors" />
+        </div>
+      )}
+
       {/* ── Tab bar ────────────────────────────────────────────────────────── */}
       <div
         className="flex items-center h-9 flex-shrink-0 border-b px-2 gap-1"
@@ -69,7 +121,6 @@ export default function PhysicsEditorPanel({
               key={tab.key}
               onClick={() => {
                 onTabChange(tab.key);
-                // Auto-expand if collapsed
                 if (collapsed) onToggleCollapse();
               }}
               className={cn(
@@ -95,7 +146,7 @@ export default function PhysicsEditorPanel({
         {/* Spacer */}
         <div className="flex-1" />
 
-        {/* Export buttons (stub) */}
+        {/* Export buttons */}
         <PhysicsExportButtons />
       </div>
 

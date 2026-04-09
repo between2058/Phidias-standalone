@@ -256,9 +256,6 @@ export default function PhysicsPage() {
     [setSelectedPartId, setSelectedJointId],
   );
 
-  // ── Panel height ──────────────────────────────────────────────────────────
-  const panelHeight = panelCollapsed ? 36 : 280;
-
   return (
     <div
       className="flex flex-col h-full overflow-hidden relative"
@@ -347,7 +344,6 @@ export default function PhysicsPage() {
         onTabChange={setEditorTab}
         collapsed={panelCollapsed}
         onToggleCollapse={() => setPanelCollapsed((c) => !c)}
-        height={panelHeight}
       />
     </div>
   );
