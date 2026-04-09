@@ -292,11 +292,7 @@ export default function PhysicsPage() {
           <ThreeViewport
             modelUrl={activeModelUrl ?? ''}
             renderMode={renderMode}
-            segmentColors={
-              Object.keys(segmentColors).length > 0
-                ? segmentColors
-                : undefined
-            }
+            segmentColors={segmentColors}
             selectedObjectId={selectedPartId}
             onObjectSelect={handleObjectSelect}
             showGrid={showGrid}
