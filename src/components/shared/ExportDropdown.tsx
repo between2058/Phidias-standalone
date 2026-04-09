@@ -2,8 +2,9 @@
 
 import { useState, useRef, useEffect } from 'react';
 import type { MutableRefObject } from 'react';
+import { usePathname } from 'next/navigation';
 import * as THREE from 'three';
-import { Upload, Box, ChevronDown, Globe, FileBox } from 'lucide-react';
+import { Upload, Box, ChevronDown, Globe, FileBox, Atom } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useWorkspace } from '@/lib/workspace-context';
 
@@ -190,6 +191,8 @@ export default function ExportDropdown({ className, sceneRef }: ExportDropdownPr
   const [open, setOpen] = useState(false);
   const [working, setWorking] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
+  const pathname = usePathname();
+  const isPhysicsTab = pathname?.includes('/workspace/physics');
   const { assets, activeAssetId } = useWorkspace();
 
   const activeAsset = assets.find(a => a.id === activeAssetId) ?? null;
@@ -318,6 +321,42 @@ export default function ExportDropdown({ className, sceneRef }: ExportDropdownPr
               </div>
             </div>
           </button>
+
+          {isPhysicsTab && (
+            <>
+              <div className="h-px mx-3 my-1" style={{ background: 'var(--border)' }} />
+              <button
+                className="w-full flex items-start gap-3 px-4 py-3 hover:bg-bg-hover transition-colors text-left"
+                onClick={() => {
+                  setOpen(false);
+                  window.dispatchEvent(new CustomEvent('physics-export', { detail: 'usda' }));
+                }}
+              >
+                <span className="mt-0.5 shrink-0 text-[#f5a623]"><Atom size={14} /></span>
+                <div className="min-w-0">
+                  <div className="text-xs font-medium text-text-primary mb-0.5">.usda (Physics)</div>
+                  <div className="text-[11px] text-text-tertiary leading-tight">
+                    Articulated USD with physics joints
+                  </div>
+                </div>
+              </button>
+              <button
+                className="w-full flex items-start gap-3 px-4 py-3 hover:bg-bg-hover transition-colors text-left"
+                onClick={() => {
+                  setOpen(false);
+                  window.dispatchEvent(new CustomEvent('physics-export', { detail: 'usdz' }));
+                }}
+              >
+                <span className="mt-0.5 shrink-0 text-[#f5a623]"><Atom size={14} /></span>
+                <div className="min-w-0">
+                  <div className="text-xs font-medium text-text-primary mb-0.5">.usdz (Physics)</div>
+                  <div className="text-[11px] text-text-tertiary leading-tight">
+                    Packaged articulated USD for iOS / NVIDIA
+                  </div>
+                </div>
+              </button>
+            </>
+          )}
         </div>
       )}
     </div>
