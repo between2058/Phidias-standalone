@@ -31,12 +31,15 @@ export default function AnchorGizmo() {
   const controlsRef = useRef<TransformControlsImpl>(null!);
 
   // Sync mesh position when anchor changes from panel input or store update
+  const anchorX = selectedJoint?.anchor[0] ?? 0;
+  const anchorY = selectedJoint?.anchor[1] ?? 0;
+  const anchorZ = selectedJoint?.anchor[2] ?? 0;
+
   useEffect(() => {
     if (selectedJoint && meshRef.current) {
-      const [x, y, z] = selectedJoint.anchor;
-      meshRef.current.position.set(x, y, z);
+      meshRef.current.position.set(anchorX, anchorY, anchorZ);
     }
-  }, [selectedJoint?.anchor[0], selectedJoint?.anchor[1], selectedJoint?.anchor[2], selectedJoint]);
+  }, [anchorX, anchorY, anchorZ, selectedJoint]);
 
   // Write new position back to store on drag end
   const handleMouseUp = useCallback(() => {
