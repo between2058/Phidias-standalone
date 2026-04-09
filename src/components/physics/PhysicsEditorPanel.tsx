@@ -4,6 +4,9 @@ import React from 'react';
 import { ChevronDown, ChevronUp, Layers, Palette, Link2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import PhysicsExportButtons from '@/components/physics/PhysicsExportButtons';
+import PhysicsPartsPanel from '@/components/physics/PhysicsPartsPanel';
+import PhysicsMaterialsPanel from '@/components/physics/PhysicsMaterialsPanel';
+import PhysicsJointsPanel from '@/components/physics/PhysicsJointsPanel';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -24,16 +27,6 @@ const TABS: { key: EditorTab; label: string; icon: React.ReactNode }[] = [
   { key: 'materials', label: 'Materials', icon: <Palette size={14} /> },
   { key: 'joints', label: 'Joints', icon: <Link2 size={14} /> },
 ];
-
-// ─── Placeholder panels (Tasks 9-11 will replace these) ────────────────────
-
-function PlaceholderPanel({ label }: { label: string }) {
-  return (
-    <div className="flex items-center justify-center h-full text-[#64748b] text-xs">
-      {label} panel — coming soon
-    </div>
-  );
-}
 
 // ─── Component ──────────────────────────────────────────────────────────────
 
@@ -109,11 +102,9 @@ export default function PhysicsEditorPanel({
       {/* ── Tab content ────────────────────────────────────────────────────── */}
       {!collapsed && (
         <div className="flex-1 overflow-hidden">
-          {activeTab === 'parts' && <PlaceholderPanel label="Parts" />}
-          {activeTab === 'materials' && (
-            <PlaceholderPanel label="Materials" />
-          )}
-          {activeTab === 'joints' && <PlaceholderPanel label="Joints" />}
+          {activeTab === 'parts' && <PhysicsPartsPanel />}
+          {activeTab === 'materials' && <PhysicsMaterialsPanel />}
+          {activeTab === 'joints' && <PhysicsJointsPanel />}
         </div>
       )}
     </div>
