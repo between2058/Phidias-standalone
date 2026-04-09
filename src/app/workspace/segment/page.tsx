@@ -1363,7 +1363,7 @@ export default function SegmentPage() {
           availableModes={['textured', 'solid', 'wireframe', 'normal']}
           current={renderMode}
           onChange={setRenderMode}
-          className="absolute top-3 left-3 z-10"
+          className="absolute bottom-20 left-3 z-10"
         />
 
         {/* Bottom Toolbar */}

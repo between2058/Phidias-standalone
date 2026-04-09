@@ -45,8 +45,6 @@ export default function SegmentHierarchyPanel({
   const startEditing = (id: string, currentName: string) => {
     setEditingId(id);
     setEditingName(currentName);
-    // Focus input on next tick after render
-    setTimeout(() => renameInputRef.current?.select(), 0);
   };
 
   const commitRename = () => {
@@ -93,6 +91,14 @@ export default function SegmentHierarchyPanel({
     };
   }, []);
 
+  // Focus and select the rename input after it mounts
+  useEffect(() => {
+    if (editingId && renameInputRef.current) {
+      renameInputRef.current.focus();
+      renameInputRef.current.select();
+    }
+  }, [editingId]);
+
   const isSelected = (id: string) => selectedPartIds.includes(id);
 
   // Top-level items: groups + ungrouped parts (no parentId)
@@ -125,7 +131,8 @@ export default function SegmentHierarchyPanel({
         startEditing(part.id, part.name);
       }}
       className={cn(
-        'group flex items-center gap-2 py-2 cursor-pointer transition-colors select-none',
+        'group flex items-center gap-2 py-2 cursor-pointer transition-colors',
+        editingId === part.id ? 'select-text' : 'select-none',
         depth === 0 ? 'px-3' : 'pr-3',
         isSelected(part.id)
           ? 'bg-[#7c3aed]/20 border-l-2 border-[#7c3aed]'
@@ -147,7 +154,9 @@ export default function SegmentHierarchyPanel({
           onBlur={commitRename}
           onKeyDown={handleRenameKeyDown}
           onClick={(e) => e.stopPropagation()}
-          className="flex-1 min-w-0 bg-[#1a1a2e] border border-[#7c3aed] rounded px-1.5 py-0.5 text-xs text-white focus:outline-none"
+          onMouseDown={(e) => e.stopPropagation()}
+          className="flex-1 min-w-0 bg-[#1a1a2e] border border-[#7c3aed] rounded px-1.5 py-0.5 text-xs text-white focus:outline-none select-text"
+          style={{ userSelect: 'text', WebkitUserSelect: 'text' }}
           autoFocus
         />
       ) : (
@@ -203,7 +212,8 @@ export default function SegmentHierarchyPanel({
             startEditing(group.id, group.name);
           }}
           className={cn(
-            'group flex items-center gap-2 px-3 py-2 cursor-pointer transition-colors select-none',
+            'group flex items-center gap-2 px-3 py-2 cursor-pointer transition-colors',
+            editingId === group.id ? 'select-text' : 'select-none',
             isSelected(group.id)
               ? 'bg-[#7c3aed]/20 border-l-2 border-[#7c3aed]'
               : 'hover:bg-[#252542] border-l-2 border-transparent',
@@ -230,7 +240,9 @@ export default function SegmentHierarchyPanel({
               onBlur={commitRename}
               onKeyDown={handleRenameKeyDown}
               onClick={(e) => e.stopPropagation()}
-              className="flex-1 min-w-0 bg-[#1a1a2e] border border-[#7c3aed] rounded px-1.5 py-0.5 text-xs text-white focus:outline-none"
+              onMouseDown={(e) => e.stopPropagation()}
+              className="flex-1 min-w-0 bg-[#1a1a2e] border border-[#7c3aed] rounded px-1.5 py-0.5 text-xs text-white focus:outline-none select-text"
+              style={{ userSelect: 'text', WebkitUserSelect: 'text' }}
               autoFocus
             />
           ) : (

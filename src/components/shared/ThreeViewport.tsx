@@ -285,7 +285,11 @@ function GLBModel({
       const oid = objectId(child);
 
       // Segment color override with selection highlight
-      const segColor = segmentColors && (segmentColors[oid] ?? segmentColors[child.name]);
+      // Skip segment colors for diagnostic render modes that have their own visuals
+      const segColor =
+        renderMode === 'textured' || renderMode === 'matcap'
+          ? segmentColors && (segmentColors[oid] ?? segmentColors[child.name])
+          : undefined;
       if (segColor) {
         // Save original material before first override
         if (!origMaterialsRef.current.has(oid)) {

@@ -44,7 +44,7 @@ function NumberInput({ value, onChange, label, color }: NumberInputProps) {
           'focus:outline-none focus:border-accent-purple transition-colors',
           'min-w-0',
         )}
-        style={{ appearance: 'textfield' }}
+        style={{ appearance: 'textfield', borderColor: 'var(--border)' }}
       />
     </div>
   );
