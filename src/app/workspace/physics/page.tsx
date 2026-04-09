@@ -71,6 +71,9 @@ export default function PhysicsPage() {
   // Render mode
   const [renderMode, setRenderMode] = useState<RenderMode>('textured');
 
+  // Color view mode: 'colored' shows part colors, 'original' shows native textures
+  const [colorViewMode, setColorViewMode] = useState<'original' | 'colored'>('colored');
+
   // Editor tab
   const [editorTab, setEditorTab] = useState<EditorTab>('parts');
 
@@ -237,15 +240,15 @@ export default function PhysicsPage() {
 
   // ── Segment colors for colored mesh display ───────────────────────────────
   const segmentColors = useMemo(() => {
+    if (colorViewMode === 'original') return {};
     const colors: Record<string, string> = {};
     for (const part of parts) {
       if (part.color) {
-        // Part id is the mesh name in the scene
         colors[part.id] = part.color;
       }
     }
     return colors;
-  }, [parts]);
+  }, [parts, colorViewMode]);
 
   // ── Object select callback ────────────────────────────────────────────────
   const handleObjectSelect = useCallback(
@@ -287,6 +290,8 @@ export default function PhysicsPage() {
               if (activeAssetId)
                 updateAsset(activeAssetId, { hasSkinnedMesh: v });
             }}
+            colorViewMode={colorViewMode}
+            onColorViewModeChange={setColorViewMode}
             className="w-full h-full"
           >
             <JointVisualizer />
