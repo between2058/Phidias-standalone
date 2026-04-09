@@ -2,7 +2,7 @@
 
 import React from 'react';
 import { PillGroup } from '@/components/ui/ProgressBar';
-import type { PhysicsPart } from '@/app/workspace/_physics/page';
+import type { PhysicsPart } from '@/store/physics-store';
 
 const COLLISION_TYPES = [
   { value: 'convexHull', label: 'Convex Hull (Recommended)' },

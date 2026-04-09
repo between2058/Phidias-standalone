@@ -4,7 +4,7 @@ import React from 'react';
 import { cn } from '@/lib/utils';
 import { mockGetPhysicsMaterials } from '@/lib/api/mock';
 import type { PhysicsMaterial } from '@/lib/api/types';
-import type { PhysicsPart } from '@/app/workspace/_physics/page';
+import type { PhysicsPart } from '@/store/physics-store';
 
 interface PhysicsMaterialsPanelProps {
   selectedPart: PhysicsPart | null;

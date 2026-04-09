@@ -2,7 +2,7 @@
 
 import React from 'react';
 import { Toggle } from '@/components/ui/ProgressBar';
-import type { PhysicsJoint } from '@/app/workspace/_physics/page';
+import type { PhysicsJoint } from '@/store/physics-store';
 
 const JOINT_TYPES = ['Revolute', 'Prismatic', 'Fixed', 'Spherical', '6-DOF'];
 const DRIVE_TYPES = ['position', 'velocity', 'none'];

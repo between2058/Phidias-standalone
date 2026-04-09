@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import { cn } from '@/lib/utils';
-import type { PhysicsPart } from '@/app/workspace/_physics/page';
+import type { PhysicsPart } from '@/store/physics-store';
 
 const TYPE_ICONS: Record<string, string> = {
   link: '🔗',
