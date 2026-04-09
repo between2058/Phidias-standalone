@@ -142,7 +142,7 @@ export default function MotionPreviewController() {
         const childPart = parts.find((p) => p.id === joint.childPartId);
         if (!childPart) continue;
 
-        const meshName = childPart.name;
+        const meshName = childPart.id;
         activeIds.add(meshName);
 
         // Find or cache the mesh
@@ -192,7 +192,7 @@ export default function MotionPreviewController() {
       return;
     }
 
-    const meshName = childPart.name;
+    const meshName = childPart.id;
     let target = meshRef.current;
 
     if (!target || target.name !== meshName) {
