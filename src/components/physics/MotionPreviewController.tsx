@@ -2,24 +2,18 @@
 
 /**
  * MotionPreviewController — Pure-logic R3F component (renders null) that
- * applies temporary transforms to child-part meshes based on
- * `jointPreviewValue` from the physics store.
- *
- * Transform math:
- *   Revolute  — translate to anchor origin, rotate around axis, translate back,
- *               then multiply with original matrix.
- *   Prismatic — translate along axis by distance, multiply with original matrix.
- *
- * Restores the original matrix when the preview value resets to 0 or when
- * the component unmounts / the selected joint changes.
+ * applies temporary transforms to child-part meshes based on either:
+ *   1. Manual preview: `jointPreviewValue` for the selected joint
+ *   2. Auto-play: time-based oscillation for ALL joints simultaneously
  */
 
 import { useRef, useEffect } from 'react';
 import * as THREE from 'three';
 import { useFrame, useThree } from '@react-three/fiber';
 import { usePhysicsStore } from '@/store/physics-store';
+import type { PhysicsJoint, PhysicsPart } from '@/store/physics-store';
 
-// ─── Helpers ───────────────────────────────────────────────────────────────
+// ─── Reusable math objects (avoid per-frame allocation) ─────────────────────
 
 const _anchorVec = new THREE.Vector3();
 const _axisVec = new THREE.Vector3();
@@ -32,7 +26,47 @@ const _resultMat = new THREE.Matrix4();
 
 const DEG2RAD = Math.PI / 180;
 
-// ─── Component ─────────────────────────────────────────────────────────────
+// ─── Helpers ────────────────────────────────────────────────────────────────
+
+function applyJointTransform(
+  target: THREE.Object3D,
+  original: THREE.Matrix4,
+  joint: PhysicsJoint,
+  value: number,
+) {
+  target.matrixAutoUpdate = false;
+
+  if (joint.type === 'Revolute') {
+    const angle = value * DEG2RAD;
+    _anchorVec.set(...joint.anchor);
+    _axisVec.set(...joint.axis).normalize();
+    _toOrigin.makeTranslation(-_anchorVec.x, -_anchorVec.y, -_anchorVec.z);
+    _quat.setFromAxisAngle(_axisVec, angle);
+    _rotMat.makeRotationFromQuaternion(_quat);
+    _fromOrigin.makeTranslation(_anchorVec.x, _anchorVec.y, _anchorVec.z);
+    _resultMat.copy(_fromOrigin).multiply(_rotMat).multiply(_toOrigin).multiply(original);
+    target.matrix.copy(_resultMat);
+  } else if (joint.type === 'Prismatic') {
+    _axisVec.set(...joint.axis).normalize();
+    _transMat.makeTranslation(
+      _axisVec.x * value,
+      _axisVec.y * value,
+      _axisVec.z * value,
+    );
+    _resultMat.copy(_transMat).multiply(original);
+    target.matrix.copy(_resultMat);
+  }
+
+  target.matrix.decompose(target.position, target.quaternion, target.scale);
+}
+
+function restoreObject(obj: THREE.Object3D, original: THREE.Matrix4) {
+  obj.matrix.copy(original);
+  obj.matrix.decompose(obj.position, obj.quaternion, obj.scale);
+  obj.matrixAutoUpdate = true;
+}
+
+// ─── Component ──────────────────────────────────────────────────────────────
 
 export default function MotionPreviewController() {
   const scene = useThree((s) => s.scene);
@@ -41,135 +75,145 @@ export default function MotionPreviewController() {
   const parts = usePhysicsStore((s) => s.parts);
   const selectedJointId = usePhysicsStore((s) => s.selectedJointId);
   const jointPreviewValue = usePhysicsStore((s) => s.jointPreviewValue);
+  const isAutoPlaying = usePhysicsStore((s) => s.isAutoPlaying);
 
-  // Track the mesh we are currently manipulating so we can restore it
+  // Manual mode: track single mesh
   const meshRef = useRef<THREE.Object3D | null>(null);
   const originalMatrixRef = useRef<THREE.Matrix4 | null>(null);
   const prevJointIdRef = useRef<string | null>(null);
 
-  // Find the selected joint and its child part
-  const selectedJoint = selectedJointId
-    ? joints.find((j) => j.id === selectedJointId) ?? null
-    : null;
+  // Auto-play mode: track all animated meshes
+  const autoMeshes = useRef<Map<string, { obj: THREE.Object3D; original: THREE.Matrix4 }>>(new Map());
 
-  const childPart = selectedJoint
-    ? parts.find((p) => p.id === selectedJoint.childPartId) ?? null
-    : null;
+  // ── Restore helpers ─────────────────────────────────────────────────────
 
-  // ── Restore helper ─────────────────────────────────────────────────────
-  function restoreMesh() {
+  function restoreManualMesh() {
     if (meshRef.current && originalMatrixRef.current) {
-      meshRef.current.matrix.copy(originalMatrixRef.current);
-      meshRef.current.matrix.decompose(
-        meshRef.current.position,
-        meshRef.current.quaternion,
-        meshRef.current.scale,
-      );
-      meshRef.current.matrixAutoUpdate = true;
+      restoreObject(meshRef.current, originalMatrixRef.current);
     }
     meshRef.current = null;
     originalMatrixRef.current = null;
   }
 
-  // ── Handle joint change — restore previous mesh ────────────────────────
+  function restoreAllAutoMeshes() {
+    for (const [, entry] of Array.from(autoMeshes.current.entries())) {
+      restoreObject(entry.obj, entry.original);
+    }
+    autoMeshes.current.clear();
+  }
+
+  // ── Handle mode/joint changes ─────────────────────────────────────────
+
   useEffect(() => {
-    if (prevJointIdRef.current !== selectedJointId) {
-      restoreMesh();
+    if (isAutoPlaying) {
+      restoreManualMesh();
+    } else {
+      restoreAllAutoMeshes();
+    }
+  }, [isAutoPlaying]);
+
+  useEffect(() => {
+    if (!isAutoPlaying && prevJointIdRef.current !== selectedJointId) {
+      restoreManualMesh();
       prevJointIdRef.current = selectedJointId;
     }
-  }, [selectedJointId]);
+  }, [selectedJointId, isAutoPlaying]);
 
-  // ── Cleanup on unmount ─────────────────────────────────────────────────
-  useEffect(() => {
-    return () => {
-      restoreMesh();
-    };
-  }, []);
+  useEffect(() => () => { restoreManualMesh(); restoreAllAutoMeshes(); }, []);
 
-  // ── Frame loop — apply preview transforms ──────────────────────────────
-  useFrame(() => {
-    // If no joint or no child part, restore and bail
-    if (!selectedJoint || !childPart) {
-      if (meshRef.current) restoreMesh();
+  // ── Frame loop ────────────────────────────────────────────────────────
+
+  useFrame(({ clock }) => {
+    if (isAutoPlaying) {
+      // ── Auto-play: animate ALL joints simultaneously ──────────────
+      const animatableJoints = joints.filter(
+        (j) => j.type === 'Revolute' || j.type === 'Prismatic',
+      );
+
+      if (animatableJoints.length === 0) {
+        if (autoMeshes.current.size > 0) restoreAllAutoMeshes();
+        return;
+      }
+
+      // Track which meshes are still active this frame
+      const activeIds = new Set<string>();
+
+      for (const joint of animatableJoints) {
+        const childPart = parts.find((p) => p.id === joint.childPartId);
+        if (!childPart) continue;
+
+        const meshName = childPart.name;
+        activeIds.add(meshName);
+
+        // Find or cache the mesh
+        let entry = autoMeshes.current.get(meshName);
+        if (!entry) {
+          const obj = scene.getObjectByName(meshName);
+          if (!obj) continue;
+          entry = { obj, original: obj.matrix.clone() };
+          autoMeshes.current.set(meshName, entry);
+        }
+
+        // Oscillate: sine wave between limits, each joint offset by index for variety
+        const idx = animatableJoints.indexOf(joint);
+        const speed = 1.2; // cycles per second (shared base)
+        const phase = (idx * Math.PI * 0.5); // stagger joints
+        const t = Math.sin(clock.elapsedTime * speed * Math.PI + phase); // -1 to 1
+
+        const lo = joint.limitsEnabled ? joint.limitLower : (joint.type === 'Revolute' ? -45 : -0.1);
+        const hi = joint.limitsEnabled ? joint.limitUpper : (joint.type === 'Revolute' ? 45 : 0.1);
+        const value = lo + (t + 1) * 0.5 * (hi - lo); // map -1..1 → lo..hi
+
+        applyJointTransform(entry.obj, entry.original, joint, value);
+      }
+
+      // Restore meshes that are no longer needed (joint removed etc.)
+      for (const [name, entry] of Array.from(autoMeshes.current.entries())) {
+        if (!activeIds.has(name)) {
+          restoreObject(entry.obj, entry.original);
+          autoMeshes.current.delete(name);
+        }
+      }
+
       return;
     }
 
-    // Find the child mesh in the scene by name
+    // ── Manual mode: animate selected joint only ─────────────────────
+
+    const selectedJoint = selectedJointId
+      ? joints.find((j) => j.id === selectedJointId) ?? null
+      : null;
+    const childPart = selectedJoint
+      ? parts.find((p) => p.id === selectedJoint.childPartId) ?? null
+      : null;
+
+    if (!selectedJoint || !childPart) {
+      if (meshRef.current) restoreManualMesh();
+      return;
+    }
+
     const meshName = childPart.name;
     let target = meshRef.current;
 
     if (!target || target.name !== meshName) {
-      // Restore previous mesh before switching
-      restoreMesh();
+      restoreManualMesh();
       target = scene.getObjectByName(meshName) ?? null;
       if (!target) return;
-      // Store original matrix
       meshRef.current = target;
       originalMatrixRef.current = target.matrix.clone();
     }
 
     const previewVal = jointPreviewValue ?? 0;
 
-    // If preview value is 0, restore to original
     if (previewVal === 0) {
       if (originalMatrixRef.current) {
-        target.matrix.copy(originalMatrixRef.current);
-        target.matrix.decompose(
-          target.position,
-          target.quaternion,
-          target.scale,
-        );
-        target.matrixAutoUpdate = true;
+        restoreObject(target, originalMatrixRef.current);
       }
       return;
     }
 
-    // Disable auto-update while we manually set the matrix
-    target.matrixAutoUpdate = false;
-
-    const original = originalMatrixRef.current!;
-
-    if (selectedJoint.type === 'Revolute') {
-      // Revolute: rotate around anchor + axis by angle (degrees -> radians)
-      const angle = previewVal * DEG2RAD;
-      _anchorVec.set(...selectedJoint.anchor);
-      _axisVec.set(...selectedJoint.axis).normalize();
-
-      // Translate to anchor origin
-      _toOrigin.makeTranslation(-_anchorVec.x, -_anchorVec.y, -_anchorVec.z);
-      // Rotate around axis
-      _quat.setFromAxisAngle(_axisVec, angle);
-      _rotMat.makeRotationFromQuaternion(_quat);
-      // Translate back
-      _fromOrigin.makeTranslation(_anchorVec.x, _anchorVec.y, _anchorVec.z);
-
-      // result = fromOrigin * rotation * toOrigin * original
-      _resultMat
-        .copy(_fromOrigin)
-        .multiply(_rotMat)
-        .multiply(_toOrigin)
-        .multiply(original);
-
-      target.matrix.copy(_resultMat);
-    } else if (selectedJoint.type === 'Prismatic') {
-      // Prismatic: translate along axis by distance
-      _axisVec.set(...selectedJoint.axis).normalize();
-      const dx = _axisVec.x * previewVal;
-      const dy = _axisVec.y * previewVal;
-      const dz = _axisVec.z * previewVal;
-
-      _transMat.makeTranslation(dx, dy, dz);
-
-      // result = translation * original
-      _resultMat.copy(_transMat).multiply(original);
-
-      target.matrix.copy(_resultMat);
-    }
-
-    // Decompose for Three.js internal state consistency
-    target.matrix.decompose(target.position, target.quaternion, target.scale);
+    applyJointTransform(target, originalMatrixRef.current!, selectedJoint, previewVal);
   });
 
-  // Renders nothing — pure logic component
   return null;
 }

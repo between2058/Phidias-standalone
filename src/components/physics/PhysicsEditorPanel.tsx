@@ -1,8 +1,9 @@
 'use client';
 
 import React, { useCallback, useRef, useState, useEffect } from 'react';
-import { ChevronDown, ChevronUp, Layers, Palette, Link2 } from 'lucide-react';
+import { ChevronDown, ChevronUp, Layers, Palette, Link2, Play, Pause } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { usePhysicsStore } from '@/store/physics-store';
 import PhysicsExportButtons from '@/components/physics/PhysicsExportButtons';
 import PhysicsPartsPanel from '@/components/physics/PhysicsPartsPanel';
 import PhysicsMaterialsPanel from '@/components/physics/PhysicsMaterialsPanel';
@@ -146,6 +147,11 @@ export default function PhysicsEditorPanel({
         {/* Spacer */}
         <div className="flex-1" />
 
+        {/* Auto-play button */}
+        <AutoPlayButton />
+
+        <div className="h-4 w-px bg-[#333355] mx-1" />
+
         {/* Export buttons */}
         <PhysicsExportButtons />
       </div>
@@ -159,5 +165,33 @@ export default function PhysicsEditorPanel({
         </div>
       )}
     </div>
+  );
+}
+
+// ─── Auto-play button ──────────────────────────────────────────────────────
+
+function AutoPlayButton() {
+  const isAutoPlaying = usePhysicsStore((s) => s.isAutoPlaying);
+  const setAutoPlaying = usePhysicsStore((s) => s.setAutoPlaying);
+  const joints = usePhysicsStore((s) => s.joints);
+  const hasAnimatable = joints.some(
+    (j) => j.type === 'Revolute' || j.type === 'Prismatic',
+  );
+
+  return (
+    <button
+      onClick={() => setAutoPlaying(!isAutoPlaying)}
+      disabled={!hasAnimatable}
+      className={cn(
+        'flex items-center gap-1 px-2 py-1 rounded-md text-[11px] font-medium transition-colors',
+        isAutoPlaying
+          ? 'bg-[#f5a623]/20 text-[#f5a623]'
+          : 'text-[#94a3b8] hover:text-white hover:bg-[#252542] disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-[#94a3b8]',
+      )}
+      title={isAutoPlaying ? 'Stop motion preview' : 'Play all joints'}
+    >
+      {isAutoPlaying ? <Pause size={12} /> : <Play size={12} />}
+      {isAutoPlaying ? 'Stop' : 'Play'}
+    </button>
   );
 }

@@ -85,6 +85,7 @@ type PhysicsState = {
   selectedPartId: string | null;
   selectedJointId: string | null;
   jointPreviewValue: number | null;
+  isAutoPlaying: boolean;
 
   // Actions
   setParts: (parts: PhysicsPart[] | ((prev: PhysicsPart[]) => PhysicsPart[])) => void;
@@ -97,6 +98,7 @@ type PhysicsState = {
   setSelectedPartId: (id: string | null) => void;
   setSelectedJointId: (id: string | null) => void;
   setJointPreviewValue: (value: number | null) => void;
+  setAutoPlaying: (playing: boolean) => void;
   reset: () => void;
 };
 
@@ -121,6 +123,7 @@ export const usePhysicsStore = create(
       selectedPartId: null,
       selectedJointId: null,
       jointPreviewValue: null,
+      isAutoPlaying: false,
 
       // ── Actions ─────────────────────────────────────────────────────
 
@@ -174,6 +177,7 @@ export const usePhysicsStore = create(
       setSelectedPartId: (id) => set({ selectedPartId: id }),
       setSelectedJointId: (id) => set({ selectedJointId: id }),
       setJointPreviewValue: (value) => set({ jointPreviewValue: value }),
+      setAutoPlaying: (playing) => set({ isAutoPlaying: playing, jointPreviewValue: playing ? null : null }),
 
       reset: () =>
         set({
@@ -182,6 +186,7 @@ export const usePhysicsStore = create(
           selectedPartId: null,
           selectedJointId: null,
           jointPreviewValue: null,
+          isAutoPlaying: false,
         }),
     }),
     {
