@@ -10,9 +10,19 @@ import { useSegmentStore } from '@/store/segment-store';
 import RenderModeSelector from '@/components/shared/RenderModeSelector';
 import type { RenderMode } from '@/components/shared/ThreeViewport';
 import PhysicsEditorPanel from '@/components/physics/PhysicsEditorPanel';
-import JointVisualizer from '@/components/physics/JointVisualizer';
-import AnchorGizmo from '@/components/physics/AnchorGizmo';
-import MotionPreviewController from '@/components/physics/MotionPreviewController';
+
+const JointVisualizer = dynamic(
+  () => import('@/components/physics/JointVisualizer'),
+  { ssr: false }
+);
+const AnchorGizmo = dynamic(
+  () => import('@/components/physics/AnchorGizmo'),
+  { ssr: false }
+);
+const MotionPreviewController = dynamic(
+  () => import('@/components/physics/MotionPreviewController'),
+  { ssr: false }
+);
 
 const ThreeViewport = dynamic(
   () => import('@/components/shared/ThreeViewport'),
@@ -125,6 +135,14 @@ export default function PhysicsPage() {
     if (usePhysicsStore.temporal.getState().futureStates.length > 0) {
       usePhysicsStore.temporal.getState().redo();
     }
+  }, []);
+
+  // ── Cleanup on unmount: stop auto-play to prevent R3F hook errors ────────
+  useEffect(() => {
+    return () => {
+      usePhysicsStore.getState().setAutoPlaying(false);
+      usePhysicsStore.getState().setJointPreviewValue(null);
+    };
   }, []);
 
   // ── Keyboard shortcuts: Cmd/Ctrl+Z / Cmd/Ctrl+Shift+Z ────────────────────
