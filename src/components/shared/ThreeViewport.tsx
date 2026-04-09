@@ -280,21 +280,6 @@ function GLBModel({
         (selectedObjectIds != null && selectedObjectIds.includes(oid));
     };
 
-    // When segmentColors is provided but empty, force-restore ALL saved originals.
-    // This handles the colored→original toggle reliably regardless of key matching.
-    const isEmptySegColors = segmentColors != null && Object.keys(segmentColors).length === 0;
-    if (isEmptySegColors && origMaterialsRef.current.size > 0) {
-      clonedScene.traverse((child) => {
-        if (!(child instanceof THREE.Mesh)) return;
-        const oid = objectId(child);
-        const saved = origMaterialsRef.current.get(oid);
-        if (saved) {
-          child.material = saved;
-        }
-      });
-      origMaterialsRef.current.clear();
-    }
-
     clonedScene.traverse((child) => {
       if (!(child instanceof THREE.Mesh)) return;
       const oid = objectId(child);

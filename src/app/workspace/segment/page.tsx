@@ -448,17 +448,11 @@ export default function SegmentPage() {
   // Derive colors and meshId map from parts (replaces explicit setState calls)
   const segmentColors = useMemo(() => {
     if (viewMode === 'original') return {};
-    // Build colors with fallback for parts that somehow still lack a color.
-    // Key by both meshId (original ID) and part.name (which may have been set
-    // on the Three.js object via handleRenamePart, changing objectId()).
+    // Build colors with fallback for parts that somehow still lack a color
     const colors: Record<string, string> = {};
     parts.forEach((p, i) => {
       const color = p.color || SEGMENT_PALETTE[i % SEGMENT_PALETTE.length];
       p.meshIds.forEach(mid => { colors[mid] = color; });
-      // Also key by part name so renamed meshes (whose obj.name changed) still match
-      if (p.name && !p.isGroup) {
-        colors[p.name] = color;
-      }
     });
     return colors;
   }, [parts, viewMode]);
@@ -1006,15 +1000,10 @@ export default function SegmentPage() {
   const handleRenamePart = useCallback((id: string, name: string) => {
     setParts((prev) => prev.map((p) => (p.id === id ? { ...p, name } : p)));
 
-    // Sync to Three.js scene: find the object by partId and update its name
-    const scene = sceneRef.current;
-    if (scene) {
-      scene.traverse((child) => {
-        if (child.userData.partId === id) {
-          child.name = name;
-        }
-      });
-    }
+    // NOTE: We intentionally do NOT set child.name on the Three.js mesh.
+    // objectId(child) uses child.name as a stable key for material tracking
+    // in origMaterialsRef. Changing child.name breaks the key mapping and
+    // causes the original texture to be permanently lost.
   }, [setParts]);
 
   // ── Save ─────────────────────────────────────────────────────────────────
