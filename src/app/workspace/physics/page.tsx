@@ -184,6 +184,57 @@ export default function PhysicsPage() {
     setPendingPhysicsData(null);
   }, [pendingPhysicsData, setParts, setJoints, setPendingPhysicsData]);
 
+  // ── Auto-populate parts from scene graph ──────────────────────────────────
+  const handleSceneGraphChange = useCallback((nodes: HierarchyItem[]) => {
+    // Flatten to mesh leaf nodes
+    const meshes: HierarchyItem[] = [];
+    function walk(items: HierarchyItem[]) {
+      for (const n of items) {
+        if (n.type === 'mesh') meshes.push(n);
+        if (n.children) walk(n.children);
+      }
+    }
+    walk(nodes);
+
+    if (meshes.length === 0) return;
+
+    // Check if parts already match (avoid re-populating on every scene graph update)
+    const currentParts = usePhysicsStore.getState().parts;
+    const currentIds = new Set(currentParts.map((p) => p.id));
+    const meshIds = meshes.map((m) => m.id);
+    const isNewModel = currentParts.length === 0 || meshIds.some((id) => !currentIds.has(id));
+
+    if (!isNewModel) return;
+
+    const PHYSICS_PALETTE = [
+      '#ef4444', '#3b82f6', '#22c55e', '#f59e0b',
+      '#8b5cf6', '#ec4899', '#06b6d4', '#84cc16',
+      '#f97316', '#a855f7', '#14b8a6', '#eab308',
+    ];
+
+    const newParts: PhysicsPart[] = meshes.map((m, i) => ({
+      id: m.id,
+      name: m.name || `Part_${i}`,
+      color: PHYSICS_PALETTE[i % PHYSICS_PALETTE.length],
+      type: 'link' as const,
+      role: 'other' as const,
+      mobility: 'fixed' as const,
+      mass: null,
+      density: 1000,
+      collisionType: 'convexHull' as const,
+      staticFriction: 0.5,
+      dynamicFriction: 0.3,
+      restitution: 0.3,
+      materialId: null,
+      isMaterialCustom: false,
+      originalMaterial: null,
+      vertexCount: 0,
+    }));
+
+    setParts(newParts);
+    usePhysicsStore.temporal.getState().clear();
+  }, [setParts]);
+
   // ── Segment colors for colored mesh display ───────────────────────────────
   const segmentColors = useMemo(() => {
     const colors: Record<string, string> = {};
@@ -231,6 +282,7 @@ export default function PhysicsPage() {
             onObjectSelect={handleObjectSelect}
             showGrid={showGrid}
             showAxes={showAxes}
+            onSceneGraphChange={handleSceneGraphChange}
             onThumbnailReady={(dataUrl) => {
               if (activeAssetId) updateAssetThumbnail(activeAssetId, dataUrl);
             }}
