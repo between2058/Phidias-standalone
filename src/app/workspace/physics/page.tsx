@@ -78,8 +78,8 @@ export default function PhysicsPage() {
   const [panelCollapsed, setPanelCollapsed] = useState(false);
 
   // Grid and axes
-  const [showGrid, setShowGrid] = useState(true);
-  const [showAxes, setShowAxes] = useState(true);
+  const [showGrid] = useState(true);
+  const [showAxes] = useState(true);
 
   // ── Undo / Redo state ─────────────────────────────────────────────────────
   // Zundo's temporal.subscribe pattern (same approach as segment page)

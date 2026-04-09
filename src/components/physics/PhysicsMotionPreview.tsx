@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useCallback } from 'react';
+import React, { useCallback, useMemo } from 'react';
 import { usePhysicsStore } from '@/store/physics-store';
 import type { PhysicsJoint } from '@/store/physics-store';
 
@@ -16,20 +16,26 @@ export default function PhysicsMotionPreview({ joint }: PhysicsMotionPreviewProp
   const jointPreviewValue = usePhysicsStore((s) => s.jointPreviewValue);
   const setJointPreviewValue = usePhysicsStore((s) => s.setJointPreviewValue);
 
-  const isRevolute = joint.type === 'Revolute';
-  const isPrismatic = joint.type === 'Prismatic';
-
-  if (!isRevolute && !isPrismatic) return null;
-
-  const min = joint.limitsEnabled ? joint.limitLower : (isRevolute ? -180 : -1);
-  const max = joint.limitsEnabled ? joint.limitUpper : (isRevolute ? 180 : 1);
-  const step = isRevolute ? 1 : 0.001;
-  const unit = isRevolute ? 'deg' : 'm';
-  const current = jointPreviewValue ?? 0;
-
   const handleReset = useCallback(() => {
     setJointPreviewValue(0);
   }, [setJointPreviewValue]);
+
+  const isRevolute = joint.type === 'Revolute';
+  const isPrismatic = joint.type === 'Prismatic';
+
+  const { min, max, step, unit } = useMemo(() => {
+    const r = isRevolute;
+    return {
+      min: joint.limitsEnabled ? joint.limitLower : (r ? -180 : -1),
+      max: joint.limitsEnabled ? joint.limitUpper : (r ? 180 : 1),
+      step: r ? 1 : 0.001,
+      unit: r ? 'deg' : 'm',
+    };
+  }, [isRevolute, joint.limitsEnabled, joint.limitLower, joint.limitUpper]);
+
+  if (!isRevolute && !isPrismatic) return null;
+
+  const current = jointPreviewValue ?? 0;
 
   return (
     <div className="pt-2 border-t border-[#333355]">

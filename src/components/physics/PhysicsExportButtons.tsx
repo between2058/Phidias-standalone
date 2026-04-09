@@ -95,7 +95,7 @@ function validatePhysicsData(
     existing.push(part.name);
     nameMap.set(sanitized, existing);
   }
-  for (const [sanitized, names] of nameMap) {
+  for (const [sanitized, names] of Array.from(nameMap.entries())) {
     if (names.length > 1) {
       errors.push({
         level: 'error',
