@@ -259,7 +259,11 @@ export default function PhysicsPage() {
     const colors: Record<string, string> = {};
     for (const part of parts) {
       if (part.color) {
+        // Key by both part.id (original mesh ID) and part.name (may differ after rename)
         colors[part.id] = part.color;
+        if (part.name && part.name !== part.id) {
+          colors[part.name] = part.color;
+        }
       }
     }
     return colors;
