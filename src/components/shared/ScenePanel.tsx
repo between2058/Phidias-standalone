@@ -32,7 +32,7 @@ export default function ScenePanel() {
       {/* Banner: shown only when we are displaying persisted segment data */}
       {showSegmentBanner && (
         <div
-          className="flex-shrink-0 px-3 py-1.5 text-[10px] border-b border-phidias-border flex items-center gap-2"
+          className="flex-shrink-0 px-3 py-1.5 text-[10px] border-b border-[#333355] flex items-center gap-2"
           style={{
             background: '#1a1a2e',
             color: '#64748b',
@@ -52,12 +52,13 @@ export default function ScenePanel() {
           onSelect={sceneGraph?.onSelect}
           onMultiSelect={sceneGraph?.onMultiSelect}
           onVisibilityToggle={sceneGraph?.onVisibilityToggle}
+          onRename={sceneGraph?.onRename}
         />
       </div>
 
       {/* Transform panel (bottom, only for model/viewport mode) */}
       {sceneGraph && (
-        <div className="border-t border-phidias-border flex-shrink-0">
+        <div className="border-t border-[#333355] flex-shrink-0">
           <TransformPanel
             transform={sceneGraph.transform ?? undefined}
             onChange={sceneGraph.onTransformChange}

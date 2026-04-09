@@ -40,11 +40,11 @@ function NumberInput({ value, onChange, label, color }: NumberInputProps) {
         step={0.01}
         onChange={(e) => onChange(parseFloat(e.target.value) || 0)}
         className={cn(
-          'w-full bg-bg-card border border-phidias-border rounded text-text-primary text-[11px] px-1.5 py-1',
-          'focus:outline-none focus:border-accent-purple transition-colors',
+          'w-full bg-bg-card border border-[#333355] rounded text-text-primary text-[11px] px-1.5 py-1',
+          'focus:outline-none focus:border-[#7c3aed] transition-colors',
           'min-w-0',
         )}
-        style={{ appearance: 'textfield', borderColor: 'var(--border)' }}
+        style={{ appearance: 'textfield' }}
       />
     </div>
   );
@@ -77,7 +77,7 @@ export default function TransformPanel({
   if (!transform) {
     return (
       <div className={cn('flex flex-col', className)}>
-        <div className="flex items-center justify-between px-3 py-2 border-b border-phidias-border">
+        <div className="flex items-center justify-between px-3 py-2 border-b border-[#333355]">
           <span className="text-xs font-semibold text-text-primary">
             Transform
           </span>
@@ -94,7 +94,7 @@ export default function TransformPanel({
   return (
     <div className={cn('flex flex-col', className)}>
       {/* Header */}
-      <div className="flex items-center justify-between px-3 py-2 border-b border-phidias-border">
+      <div className="flex items-center justify-between px-3 py-2 border-b border-[#333355]">
         <span className="text-xs font-semibold text-text-primary">
           Transform
         </span>

@@ -339,7 +339,10 @@ function GLBModel({
           break;
         }
         case 'normal': {
-          child.material = new THREE.MeshNormalMaterial();
+          if (child.geometry && !child.geometry.attributes.normal) {
+            child.geometry.computeVertexNormals();
+          }
+          child.material = new THREE.MeshNormalMaterial({ side: THREE.DoubleSide });
           break;
         }
         case 'textured':

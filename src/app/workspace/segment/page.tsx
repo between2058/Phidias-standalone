@@ -1280,11 +1280,12 @@ export default function SegmentPage() {
       onMultiSelect: handlePanelMultiSelect,
       onVisibilityToggle: handleVisibilityToggle,
       onTransformChange: handleTransformChange,
+      onRename: handleRenamePart,
     });
   }, [
     parts, selectedPartId, selectedPartIds, transform,
     handlePanelSelect, handlePanelMultiSelect, handleVisibilityToggle, handleTransformChange,
-    setSceneGraph,
+    handleRenamePart, setSceneGraph,
   ]);
   useEffect(() => () => setSceneGraph(null), [setSceneGraph]);
 
@@ -1363,7 +1364,7 @@ export default function SegmentPage() {
           availableModes={['textured', 'solid', 'wireframe', 'normal']}
           current={renderMode}
           onChange={setRenderMode}
-          className="absolute bottom-20 left-3 z-10"
+          className="absolute bottom-20 left-1/2 -translate-x-1/2 z-10"
         />
 
         {/* Bottom Toolbar */}
