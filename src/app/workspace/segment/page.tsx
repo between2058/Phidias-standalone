@@ -778,13 +778,16 @@ export default function SegmentPage() {
     // node re-parenting. The custom undo/redo logic (applyTransformSnapshot)
     // handles imperative transform restoration independently of Zundo.
 
-    // Sync mesh names for single-mesh parts
+    // Tag meshes with partId for lookup, but do NOT change obj.name.
+    // objectId(obj) uses obj.name as a stable key for material tracking
+    // in ThreeViewport's origMaterialsRef. Changing obj.name breaks the
+    // key mapping and causes the original texture to be permanently lost.
     targetParts.forEach((part) => {
       if (!part.isGroup && part.meshIds.length === 1) {
         const entry = registry.get(part.meshIds[0]);
         if (entry?.obj) {
-          entry.obj.name = part.name;
           entry.obj.userData.partId = part.id;
+          entry.obj.userData.displayName = part.name;
         }
       }
     });
