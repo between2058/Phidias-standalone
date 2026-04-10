@@ -855,28 +855,21 @@ export async function generateAngleMulti(
 }
 
 // ─── Articulation Service ──────────────────────────────────────────────────
-// Bypass Next.js proxy for large GLB uploads — call articulation-service directly.
-// Uses NEXT_PUBLIC_ARTICULATION_API_URL (browser-accessible) to avoid the
-// proxy body size limit that causes ERR_CONNECTION_RESET on large files.
-
-function getArticulationApiUrl(): string {
-  return (
-    process.env.NEXT_PUBLIC_ARTICULATION_API_URL ||
-    `${getBackendApi()}/phidias/articulation`
-  );
-}
 
 export async function parseGlbForPhysics(
   file: File,
 ): Promise<ParsedPhysicsResult> {
   const formData = new FormData();
   formData.append('file', file);
-  const response = await fetchTimeout(
-    `${getArticulationApiUrl()}/api/parse-glb`,
-    { method: 'POST', body: formData, timeout: 60000 },
+  const { data } = await client.post<ParsedPhysicsResult>(
+    `${getBackendApi()}/phidias/articulation/parse-glb`,
+    formData,
+    {
+      headers: { 'Content-Type': 'multipart/form-data' },
+      timeout: 60000,
+    },
   );
-  const data = await response.json();
-  return data as ParsedPhysicsResult;
+  return data;
 }
 
 export async function exportArticulationUsda(
@@ -892,12 +885,15 @@ export async function exportArticulationUsda(
       joints: exportData.joints,
     }),
   );
-  const response = await fetchTimeout(
-    `${getArticulationApiUrl()}/api/export-usda`,
-    { method: 'POST', body: formData, timeout: 300000 },
+  const { data } = await client.post<ArticulationExportResult>(
+    `${getBackendApi()}/phidias/articulation/export-usda`,
+    formData,
+    {
+      headers: { 'Content-Type': 'multipart/form-data' },
+      timeout: 120000,
+    },
   );
-  const data = await response.json();
-  return data as ArticulationExportResult;
+  return data;
 }
 
 export async function exportArticulationUsdz(
@@ -913,20 +909,23 @@ export async function exportArticulationUsdz(
       joints: exportData.joints,
     }),
   );
-  const response = await fetchTimeout(
-    `${getArticulationApiUrl()}/api/export-usdz`,
-    { method: 'POST', body: formData, timeout: 300000 },
+  const { data } = await client.post<ArticulationExportResult>(
+    `${getBackendApi()}/phidias/articulation/export-usdz`,
+    formData,
+    {
+      headers: { 'Content-Type': 'multipart/form-data' },
+      timeout: 120000,
+    },
   );
-  const data = await response.json();
-  return data as ArticulationExportResult;
+  return data;
 }
 
 export async function downloadArticulationFile(
   filename: string,
 ): Promise<Blob> {
-  const response = await fetchTimeout(
-    `${getArticulationApiUrl()}/api/download/${filename}`,
+  const { data } = await client.get<Blob>(
+    `${getBackendApi()}/phidias/articulation/download/${filename}`,
     { timeout: 60000 },
   );
-  return response.blob();
+  return data;
 }
