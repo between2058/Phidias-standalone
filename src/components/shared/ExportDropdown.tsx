@@ -72,39 +72,6 @@ async function downloadGlbFromScene(scene: THREE.Group, baseName: string) {
   setTimeout(() => URL.revokeObjectURL(url), 5000);
 }
 
-/**
- * Ensure all mesh materials are MeshStandardMaterial.
- * USDZExporter only supports MeshStandardMaterial — MeshPhysicalMaterial
- * and others are silently skipped, resulting in missing materials in USDZ.
- */
-function ensureStandardMaterials(scene: THREE.Object3D) {
-  scene.traverse((child) => {
-    if (!(child instanceof THREE.Mesh)) return;
-    const mat = child.material;
-    if (!mat || mat.type === 'MeshStandardMaterial') return;
-
-    // Convert MeshPhysicalMaterial or any PBR-like material to MeshStandardMaterial
-    const std = new THREE.MeshStandardMaterial();
-    if ('color' in mat) std.color.copy((mat as THREE.MeshStandardMaterial).color);
-    if ('map' in mat && (mat as THREE.MeshStandardMaterial).map) std.map = (mat as THREE.MeshStandardMaterial).map;
-    if ('normalMap' in mat && (mat as THREE.MeshStandardMaterial).normalMap) std.normalMap = (mat as THREE.MeshStandardMaterial).normalMap;
-    if ('roughness' in mat) std.roughness = (mat as THREE.MeshStandardMaterial).roughness;
-    if ('metalness' in mat) std.metalness = (mat as THREE.MeshStandardMaterial).metalness;
-    if ('roughnessMap' in mat && (mat as THREE.MeshStandardMaterial).roughnessMap) std.roughnessMap = (mat as THREE.MeshStandardMaterial).roughnessMap;
-    if ('metalnessMap' in mat && (mat as THREE.MeshStandardMaterial).metalnessMap) std.metalnessMap = (mat as THREE.MeshStandardMaterial).metalnessMap;
-    if ('emissive' in mat) std.emissive.copy((mat as THREE.MeshStandardMaterial).emissive);
-    if ('emissiveMap' in mat && (mat as THREE.MeshStandardMaterial).emissiveMap) std.emissiveMap = (mat as THREE.MeshStandardMaterial).emissiveMap;
-    if ('emissiveIntensity' in mat) std.emissiveIntensity = (mat as THREE.MeshStandardMaterial).emissiveIntensity;
-    if ('aoMap' in mat && (mat as THREE.MeshStandardMaterial).aoMap) std.aoMap = (mat as THREE.MeshStandardMaterial).aoMap;
-    if ('alphaMap' in mat && (mat as THREE.MeshStandardMaterial).alphaMap) std.alphaMap = (mat as THREE.MeshStandardMaterial).alphaMap;
-    if ('transparent' in mat) std.transparent = mat.transparent;
-    if ('opacity' in mat) std.opacity = mat.opacity;
-    if ('side' in mat) std.side = mat.side;
-    if ('alphaTest' in mat) std.alphaTest = mat.alphaTest;
-    child.material = std;
-  });
-}
-
 /** Load the GLB via GLTFLoader then convert to USDZ with USDZExporter. */
 async function downloadUsdz(modelUrl: string, baseName: string) {
   const { GLTFLoader } = await import('three/examples/jsm/loaders/GLTFLoader.js');
@@ -114,7 +81,6 @@ async function downloadUsdz(modelUrl: string, baseName: string) {
     new GLTFLoader().load(modelUrl, resolve, undefined, reject);
   });
 
-  ensureStandardMaterials(gltf.scene);
   const exporter = new USDZExporter();
   const arraybuffer = await exporter.parseAsync(gltf.scene);
   const blob = new Blob([arraybuffer], { type: 'model/vnd.usdz+zip' });
@@ -199,26 +165,10 @@ async function downloadUsdzFromScene(scene: THREE.Group, baseName: string) {
     }
   });
 
-  // Convert non-standard materials (e.g. MeshPhysicalMaterial) so USDZExporter doesn't skip them
-  // Save originals so we can restore after export
-  const matOverrides: { mesh: THREE.Mesh; origMat: THREE.Material | THREE.Material[] }[] = [];
-  scene.traverse((child) => {
-    if (!(child instanceof THREE.Mesh)) return;
-    const mat = child.material;
-    if (mat && mat.type !== 'MeshStandardMaterial') {
-      matOverrides.push({ mesh: child, origMat: mat });
-    }
-  });
-  ensureStandardMaterials(scene);
-
   const { USDZExporter } = await import('three/examples/jsm/exporters/USDZExporter.js');
   const exporter = new USDZExporter();
   const arraybuffer = await exporter.parseAsync(scene);
 
-  // Restore material type overrides
-  for (const { mesh, origMat } of matOverrides) {
-    mesh.material = origMat;
-  }
   // Restore segment-color materials
   for (const { mesh, coloredMat } of overrides) {
     mesh.material = coloredMat;
