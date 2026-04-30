@@ -1,0 +1,702 @@
+stages:
+  - build-config
+  - eslint
+  - vitest
+  - build-docker
+  - build-static
+  - build-static-docker
+  - deploy-image
+  - build-yaml
+  - notify
+  - deploy
+  - generate-release-note
+  - cleanup
+
+variables:
+  BUILD_CONFIG_SH: 'setup_local_config.sh'
+  DOCKER_PHIDIAS_STANDALONE_IMAGE_NAME: 'ctrdc-dev-dockerhub.pegatroncorp.com/pegaverse/phidias-standalone'
+  DOCKER_PHIDIAS_STATIC_IMAGE_NAME: 'ctrdc-dev-dockerhub.pegatroncorp.com/pegaverse/phidias-static'
+  DOCKER_SERVER: 'ctrdc-dev-dockerhub.pegatroncorp.com'
+  DOCKER_ACCOUNT: 'robot$$pegaverse'
+  DOCKER_PWD_CTRDC: 'eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJpYXQiOjE3NDM0MTkzNjQsImlzcyI6ImhhcmJvci10b2tlbi1kZWZhdWx0SXNzdWVyIiwiaWQiOjYxNCwicGlkIjo2MTEsImFjY2VzcyI6W3siUmVzb3VyY2UiOiIvcHJvamVjdC82MTEvcmVwb3NpdG9yeSIsIkFjdGlvbiI6InB1c2giLCJFZmZlY3QiOiIifSx7IlJlc291cmNlIjoiL3Byb2plY3QvNjExL2hlbG0tY2hhcnQiLCJBY3Rpb24iOiJyZWFkIiwiRWZmZWN0IjoiIn0seyJSZXNvdXJjZSI6Ii9wcm9qZWN0LzYxMS9oZWxtLWNoYXJ0LXZlcnNpb24iLCJBY3Rpb24iOiJjcmVhdGUiLCJFZmZlY3QiOiIifV19.g2vrryrJh8zNkVzC0hc7WXWUj4aD9UWcsPrJSiaz-wd06fopmEYIrOOoog07LGRW7W8bWGHhkeEmfZO7c4Lx4hXDQqqGEjrmig1GBGXuNOAw6C-MXzA0XKbMCo4jfYkvxtL8LbDXOmJ6IPbkoR_UNCF1yfFXoTV0GG0kJiQKwAt7oxCF6ujlvaZcWLPOJBkoG-1yXlBcyjcyxEchd_7jU4mWOQAQRnoHbZXLdaipOqtLXjLsfQ8e6zZOtEt1VM37lXl4kjoKcMYKWVnsN5tQPd5hlZi2KP8bVxW_vrWDNrH7IAfPdd9nuab1qXXzEIPu8WCX3s12DjF0FEjz6TM760N-LwgF67_7WeAX572KdtPhW9rg5h9ySKyKwyNawIFcyLyHxcCURxwf4cfewlpd42KODuZo1w1Dyn-WdHxTLWyFaHLzpakeNsNdJdLpRug5d7359mXK-j4EKfIeTME1Je8QAiPPeQFdmG5YxsRFU-kIGFRGkb1R_mRMO-KkXJSYm79c0HAAJQHozd7iOGQzActPstgTG2oiTasNR114mElvuzjBIqoo79vZxda0T1-fRZ4Gr5BZLcG2wukS2L0zDhe8XObQ-cYnkUWTG3qFzEKNlw6ms-iLzqFaz6SK-Lh496H4C3yOFwbtN5UK-N4sbJvCdh0__-mmrx5K1FFBfXg'
+  # MCPDC Harbor — same robot account name, different server + JWT
+  DOCKER_MCPDC_SERVER: 'mcpdc-dockerhub.pegatroncorp.com'
+  DOCKER_MCPDC_PWD: 'eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJpYXQiOjE3NDM0MTk3MjUsImlzcyI6ImhhcmJvci10b2tlbi1kZWZhdWx0SXNzdWVyIiwiaWQiOjcxMywicGlkIjo0MzA0LCJhY2Nlc3MiOlt7IlJlc291cmNlIjoiL3Byb2plY3QvNDMwNC9yZXBvc2l0b3J5IiwiQWN0aW9uIjoicHVzaCIsIkVmZmVjdCI6IiJ9LHsiUmVzb3VyY2UiOiIvcHJvamVjdC80MzA0L2hlbG0tY2hhcnQiLCJBY3Rpb24iOiJyZWFkIiwiRWZmZWN0IjoiIn0seyJSZXNvdXJjZSI6Ii9wcm9qZWN0LzQzMDQvaGVsbS1jaGFydC12ZXJzaW9uIiwiQWN0aW9uIjoiY3JlYXRlIiwiRWZmZWN0IjoiIn1dfQ.EW0iqNVCY8ceRhTg-73X6F7xjfjK_OnvOMFlZ5XiuDwPkJZ1q9pN5NyDLYKfAvBddHUgOuS6NnoFSaIpaNq3Tu-TCUOmDw4PlWa_Eo4J-2ixsByo8del-G2qTTQ3NeYDANgqMDppGNRr7ze5ACooxASXX4PjumERus7HJVMQ4lLMrytPdmTpAvSeFGCw8XLm3UG1r-ZTcjFYuPI51Po3LHpf9XLsobATHX3b3YG191uYvEbn-f3VSyzu8r8O-Tp_xEGg986kdXLwC-a0d9xIWlgAid88nKKfvc_a-_9NL1HIfuQiwPiwxmaVO0p5Fnr0XrfPkkmcJnAdIyM_M3PRHKt8eqo8Ztad9QtRL0kYZlJGqyLZ7AUVkJOmoHTolAK80NKsJhf24cr5izQEqOo4ZqJVfaFIvdc3kcmgeAxZhKfExiBBqcsp3fvQWXdcAlgCM6oVXXgbNUhCX0NYQ42DuPA2FJUcSwAX7fhT1VysMaVEo753UKa0WxA4EuwaioA2wc1ZYJ0BmO38SmB--_oJdDbBqtZWPdTbEeJWZvpfKASIhKnRMB0IDSZG68WSfPOE4jllaaCGlrR7DUIbXO7HFMMioe6xVkt2HjXWfhn4D6ag9I_WIdjiQhPnzxWDUzAonS_XmJEa546GBn0xsnQVxiHfymfjxj2yufv-i6ftmzU'
+  TEAMS_WEBHOOK_URL: 'https://default5ab9aaef2fe64d66a5f2129a667184.6b.environment.api.powerplatform.com:443/powerautomate/automations/direct/workflows/c723fc6a99a245179226985e3b32e3cc/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=ZLZX7PhpyQ_Gk1sEQu50J7J99BJ-jQ5b2wvCtXIaeqY'
+  GEN_RELEASE_SH: "scripts/gen_release_note.sh"
+  FORCE_UPDATE_SERVICE: "false"
+  # Node.js Docker image for eslint / wc build
+  NODE_IMAGE: 'node:20-alpine'
+  PNPM_VERSION: '10.2.0'
+
+# ─── Shared Templates ─────────────────────────────────────────────────────────
+
+.job-init-submodule: &job-init-submodule-def
+  before_script:
+    - git -c http.sslVerify=false submodule sync --recursive
+    - git -c http.sslVerify=false submodule update --init --recursive --remote -f
+    - rm -rf ci_utils/.git
+
+# Build config: verify .env exists and generate config/config.ini from HQ.ini
+# so that downstream docker build jobs have a properly escaped ini file
+# (parse_ini.sh uses eval which expands bare $ signs in values).
+.job-build-config: &job-build-config-def
+  stage: build-config
+  script:
+    - echo "Verifying .env for build"
+    - '[ -f .env ] || { echo "ERROR: .env not found"; exit 1; }'
+    - echo "SITE=${site:-HQ}, DEPLOY=${deploy:-test}"
+    - export SITE="${site:-HQ}"
+    - export DEPLOY="${deploy:-test}"
+    - bash $BUILD_CONFIG_SH -s $SITE -d $DEPLOY
+    - |
+      # Re-write docker_account and docker_pwd using CI env vars so that
+      # the $ sign in robot$pegaverse is not lost when parse_ini.sh eval-parses the file.
+      sed -i "s|^docker_account *=.*|docker_account = ${DOCKER_ACCOUNT}|" config/config.ini
+      sed -i "s|^docker_pwd *=.*|docker_pwd = ${DOCKER_PWD_CTRDC}|" config/config.ini
+    - echo "config/config.ini ready"
+  tags:
+    - m01
+  artifacts:
+    paths:
+      - .env
+      - config/config.ini
+    expire_in: 1 hr
+
+# ESLint via next lint
+.job-eslint: &job-eslint-def
+  stage: eslint
+  script:
+    - docker run --rm
+      --cpus=2 --memory=4G
+      -u $(id -u):$(id -g)
+      --env npm_config_cache=/tmp/npm-cache
+      --env CICD_PUBLISH_TOKEN=${CICD_PUBLISH_TOKEN}
+      --env PNPM_VERSION=${PNPM_VERSION}
+      -v $(pwd):/app
+      -w /app
+      ${NODE_IMAGE}
+      sh scripts/phidias-lint.sh
+  tags:
+    - m01
+
+# Vitest unit tests
+.job-vitest: &job-vitest-def
+  stage: vitest
+  script:
+    - docker run --rm
+      --cpus=2 --memory=4G
+      -u $(id -u):$(id -g)
+      --env npm_config_cache=/tmp/npm-cache
+      --env CICD_PUBLISH_TOKEN=${CICD_PUBLISH_TOKEN}
+      --env PNPM_VERSION=${PNPM_VERSION}
+      -v $(pwd):/app
+      -w /app
+      ${NODE_IMAGE}
+      sh scripts/phidias-test.sh
+  tags:
+    - m01
+
+# Build phidias-next Docker image (Next.js SSR, hosts both frontend and API proxy)
+.job-build-phidias-next-docker: &job-build-phidias-next-docker-def
+  stage: build-docker
+  <<: *job-init-submodule-def
+  script:
+    - echo "Build phidias standalone next docker image"
+    - export BRANCH_NAME=$(echo ${CI_COMMIT_REF_NAME} | sed 's/[^a-zA-Z0-9._-]/-/g' | tr '[:upper:]' '[:lower:]')
+    - if [ -n "$CI_COMMIT_TAG" ]; then TAG_NAME="$CI_COMMIT_TAG"; elif [ "${CI_COMMIT_REF_NAME}" = "master" ]; then TAG_NAME="${deploy}_latest"; else TAG_NAME="${BRANCH_NAME}"; fi
+    - echo "Build phidias next docker image tag name ${TAG_NAME}"
+    - bash scripts/build-deploy-inter.sh -bs $site -dt $deploy -bi phidias-standalone --build-image-only -t ${TAG_NAME}
+  tags:
+    - m01
+
+# Build phidias-static Docker image (nginx serving WC bundle)
+.job-build-phidias-static-docker: &job-build-phidias-static-docker-def
+  stage: build-static-docker
+  script:
+    - echo "Build phidias standalone static docker image"
+    - export BRANCH_NAME=$(echo ${CI_COMMIT_REF_NAME} | sed 's/[^a-zA-Z0-9._-]/-/g' | tr '[:upper:]' '[:lower:]')
+    - if [ -n "$CI_COMMIT_TAG" ]; then TAG_NAME="$CI_COMMIT_TAG"; elif [ "${CI_COMMIT_REF_NAME}" = "master" ]; then TAG_NAME="${deploy}_latest"; else TAG_NAME="${BRANCH_NAME}"; fi
+    - echo "Build phidias static docker image tag name ${TAG_NAME}"
+    - bash scripts/build-deploy-inter.sh -bs $site -dt $deploy -bi phidias-static --build-image-only -t ${TAG_NAME}
+  tags:
+    - m01
+
+# Build WC script (dist/phidias-wc.js + dist/phidias-manifest.json) — consumed by static Docker image build
+.job-build-static-latest: &job-build-static-latest-def
+  stage: build-static
+  script:
+    - docker run --rm
+      --cpus=4 --memory=8G
+      -u $(id -u):$(id -g)
+      --env npm_config_cache=/tmp/npm-cache
+      --env CICD_PUBLISH_TOKEN=${CICD_PUBLISH_TOKEN}
+      --env PNPM_VERSION=${PNPM_VERSION}
+      -v $(pwd):/app
+      -w /app
+      ${NODE_IMAGE}
+      sh scripts/phidias-build-wc.sh latest
+  artifacts:
+    name: "phidias-wc-latest"
+    paths:
+      - dist/phidias-wc.js
+      - dist/phidias-wc.js.map
+      - dist/phidias-manifest.json
+    expire_in: 1 mos
+  tags:
+    - m01
+
+# Build WC script (steady mode) — content-hashed bundle for immutable CDN caching (tag builds only)
+.job-build-wc-steady: &job-build-wc-steady-def
+  stage: build-static
+  script:
+    - docker run --rm
+      --cpus=4 --memory=8G
+      -u $(id -u):$(id -g)
+      --env npm_config_cache=/tmp/npm-cache
+      --env CICD_PUBLISH_TOKEN=${CICD_PUBLISH_TOKEN}
+      --env PNPM_VERSION=${PNPM_VERSION}
+      --env CI_COMMIT_TAG=${CI_COMMIT_TAG}
+      -v $(pwd):/app
+      -w /app
+      ${NODE_IMAGE}
+      sh scripts/phidias-build-wc.sh steady
+  artifacts:
+    name: "phidias-wc-steady"
+    paths:
+      - dist/phidias-wc.js          # pass-through: already in workspace via needs from build-wc:test
+      - dist/phidias-wc.js.map
+      - dist/phidias-wc-*.js        # new content-hashed steady bundle
+      - dist/phidias-wc-*.js.map
+      - dist/phidias-manifest.json  # full manifest: latest + steady + <tag> entries
+    expire_in: 1 mos
+  tags:
+    - m01
+
+# Push phidias-next image to registry
+.job-deploy-phidias-next-image: &job-deploy-phidias-next-image-def
+  stage: deploy-image
+  script:
+    - echo "Push phidias next image (Deploy=$deploy, SITE=$site)"
+    - export BRANCH_NAME=$(echo ${CI_COMMIT_REF_NAME} | sed 's/[^a-zA-Z0-9._-]/-/g' | tr '[:upper:]' '[:lower:]')
+    - if [ -n "$CI_COMMIT_TAG" ]; then TAG_NAME="$CI_COMMIT_TAG"; elif [ "${CI_COMMIT_REF_NAME}" = "master" ]; then TAG_NAME="${deploy}_latest"; else TAG_NAME="${BRANCH_NAME}"; fi
+    - bash scripts/build-deploy-inter.sh -bs $site -dt $deploy -bi phidias-standalone --push-image-only -t ${TAG_NAME}
+  tags:
+    - m01
+
+# Push phidias-static image to registry
+.job-deploy-phidias-static-image: &job-deploy-phidias-static-image-def
+  stage: deploy-image
+  script:
+    - echo "Push phidias static image (Deploy=$deploy, SITE=$site)"
+    - export BRANCH_NAME=$(echo ${CI_COMMIT_REF_NAME} | sed 's/[^a-zA-Z0-9._-]/-/g' | tr '[:upper:]' '[:lower:]')
+    - if [ -n "$CI_COMMIT_TAG" ]; then TAG_NAME="$CI_COMMIT_TAG"; elif [ "${CI_COMMIT_REF_NAME}" = "master" ]; then TAG_NAME="${deploy}_latest"; else TAG_NAME="${BRANCH_NAME}"; fi
+    - bash scripts/build-deploy-inter.sh -bs $site -dt $deploy -bi phidias-standalone --push-image-only -t ${TAG_NAME}
+  tags:
+    - m01
+
+# Push phidias-next image to MCPDC registry (tag builds only)
+# site: HQ + deploy: production → config.ini reads [HQ.COMMON.production.S] → docker_server = mcpdc-dockerhub.pegatroncorp.com
+.job-deploy-phidias-next-image-mcpdc: &job-deploy-phidias-next-image-mcpdc-def
+  stage: deploy-image
+  variables:
+    site: HQ
+    deploy: production
+    TZ_STR: 'Asia/Taipei'
+  script:
+    - echo "Push phidias standalone image to MCPDC (Deploy=$deploy, SITE=$site)"
+    - TAG_NAME="${CI_COMMIT_TAG}"
+    - bash scripts/build-deploy-inter.sh -bs $site -dt $deploy -bi phidias-standalone --push-image-only -t ${TAG_NAME}
+  tags:
+    - m01
+
+# Push phidias-static image to MCPDC registry (tag builds only)
+.job-deploy-phidias-static-image-mcpdc: &job-deploy-phidias-static-image-mcpdc-def
+  stage: deploy-image
+  variables:
+    site: HQ
+    deploy: production
+    TZ_STR: 'Asia/Taipei'
+  script:
+    - echo "Push phidias static image to MCPDC (Deploy=$deploy, SITE=$site)"
+    - TAG_NAME="${CI_COMMIT_TAG}"
+    - bash scripts/build-deploy-inter.sh -bs $site -dt $deploy -bi phidias-static --push-image-only -t ${TAG_NAME}
+  tags:
+    - m01
+
+# Build phidias-next deployment YAML (Deployment + ClusterIP + NodePort)
+.job-build-next-yaml: &job-build-next-yaml-def
+  stage: build-yaml
+  script:
+    - echo "Build phidias-next deployment YAML"
+    - if [ -n "$CI_COMMIT_TAG" ]; then TAG_NAME="$CI_COMMIT_TAG"; else TAG_NAME="${deploy}_latest"; fi
+    - bash scripts/build-deploy-inter.sh -bs $site -dt $deploy --build-next-yaml-only -t ${TAG_NAME}
+  tags:
+    - m01
+  artifacts:
+    when: always
+    expire_in: 1 mos
+    untracked: false
+    paths:
+      - local_output
+
+# Deploy phidias-next to k8s via kubectl apply
+.job-deploy-next: &job-deploy-next-def
+  stage: deploy
+  script:
+    - echo "Deploy phidias-next to k8s"
+    - bash scripts/build-deploy-inter.sh --deploy-next-only --force-update-service true
+  tags:
+    - m01
+  artifacts:
+    paths:
+      - local_output
+
+# Build static deployment YAML (phidias-static Deployment + ClusterIP + nginx Ingress)
+.job-build-static-yaml: &job-build-static-yaml-def
+  stage: build-yaml
+  script:
+    - echo "Build phidias-static deployment YAML"
+    - if [ -n "$CI_COMMIT_TAG" ]; then TAG_NAME="$CI_COMMIT_TAG"; else TAG_NAME="${deploy}_latest"; fi
+    - bash scripts/build-deploy-inter.sh -bs $site -dt $deploy -bi phidias-static --build-static-yaml-only -t ${TAG_NAME}
+  tags:
+    - m01
+  artifacts:
+    when: always
+    expire_in: 1 mos
+    untracked: false
+    paths:
+      - local_output
+
+# Deploy phidias-static to k8s via kubectl apply
+.job-deploy-static: &job-deploy-static-def
+  stage: deploy
+  script:
+    - echo "Deploy phidias-static to k8s"
+    - bash scripts/build-deploy-inter.sh --deploy-static-only
+  tags:
+    - m01
+  artifacts:
+    paths:
+      - local_output
+
+# Notify Teams
+.job-notify-teams: &job-notify-teams-def
+  stage: notify
+  script:
+    - |
+      IMG_NAME="${CI_REGISTRY_IMAGE:-$CI_PROJECT_PATH}"
+      IMG_TAG="${CI_COMMIT_REF_NAME}"
+      TITLE="${CI_COMMIT_TITLE}"
+      AUTHOR="${CI_COMMIT_AUTHOR}"
+      TS="${CI_COMMIT_TIMESTAMP}"
+      D_TITLE="PHIDIAS STANDALONE TEST"
+      D_URL="http://172.18.246.244:30147"
+
+      PAYLOAD=$(jq -n \
+        --arg img "$IMG_NAME" \
+        --arg tag "$IMG_TAG" \
+        --arg title "$TITLE" \
+        --arg author "$AUTHOR" \
+        --arg ts "$TS" \
+        --arg d_title "$D_TITLE" \
+        --arg d_url "$D_URL" \
+        --arg pipeline_url "${CI_SERVER_PROTOCOL}://${CI_SERVER_HOST}:${CI_SERVER_PORT}/${CI_PROJECT_PATH}/-/pipelines/${CI_PIPELINE_ID}" \
+        '{
+          "type": "message",
+          "attachments": [
+            {
+              "contentType": "application/vnd.microsoft.card.adaptive",
+              "content": {
+                "type": "AdaptiveCard",
+                "$schema": "http://adaptivecards.io/schemas/adaptive-card.json",
+                "version": "1.5",
+                "body": [
+                  { "type": "TextBlock", "text": "Phidias Standalone deployed !", "style": "heading", "size": "Large", "color": "Good" },
+                  {
+                    "type": "FactSet",
+                    "facts": [
+                      { "title": "Image name", "value": $img },
+                      { "title": "Image tag", "value": $tag },
+                      { "title": "Commit title", "value": $title },
+                      { "title": "Committed by", "value": $author },
+                      { "title": "Committed at", "value": $ts }
+                    ]
+                  },
+                  {
+                    "type": "TextBlock",
+                    "text": "Trigger deploy on Gitlab to update [\($d_title)](\($d_url))",
+                    "wrap": true,
+                    "color": "Accent"
+                  },
+                  {
+                    "type": "ActionSet",
+                    "actions": [
+                      { "type": "Action.OpenUrl", "title": "Gitlab pipeline", "style": "positive", "url": $pipeline_url }
+                    ]
+                  }
+                ]
+              }
+            }
+          ]
+        }')
+
+      curl -X POST -H "Content-Type: application/json" -d "$PAYLOAD" "${TEAMS_WEBHOOK_URL}"
+
+  tags:
+    - m01
+
+# Deploy image to k8s
+.job-deploy: &job-deploy-def
+  stage: deploy
+  before_script:
+    - git -c http.sslVerify=false submodule sync --recursive
+    - git -c http.sslVerify=false submodule update --init --recursive --remote -f
+    - rm -rf ci_utils/.git
+    - rm -rf modules/push_metrics_module/.git
+    - rm -rf modules/all_modules/.git
+  script:
+    - echo "Deploy phidias standalone to k8s"
+    - export BRANCH_NAME=$(echo ${CI_COMMIT_REF_NAME} | sed 's/[^a-zA-Z0-9._-]/-/g' | tr '[:upper:]' '[:lower:]')
+    - if [ -n "$CI_COMMIT_TAG" ]; then TAG_NAME="$CI_COMMIT_TAG"; elif [ "${CI_COMMIT_REF_NAME}" = "master" ]; then TAG_NAME="${deploy}_latest"; else TAG_NAME="${BRANCH_NAME}"; fi
+    - bash scripts/build-deploy-inter.sh -dt $deploy --deploy-only -t ${TAG_NAME} -n ${BRANCH_NAME} -ib $issue_branch --force-update-service ${FORCE_UPDATE_SERVICE}
+  artifacts:
+    paths:
+      - local_output
+  tags:
+    - m01
+
+# Generate release note
+.job-gen-release-note-def: &job-gen-release-note-def
+  stage: generate-release-note
+  script:
+    - echo 'Generate release note!'
+    - bash $GEN_RELEASE_SH
+  tags:
+    - m01
+
+# Cleanup deployment
+.job-cleanup-deployment: &job-cleanup-deployment-def
+  stage: cleanup
+  before_script:
+    - git -c http.sslVerify=false submodule sync --recursive
+    - git -c http.sslVerify=false submodule update --init --recursive --remote -f
+    - rm -rf ci_utils/.git
+    - rm -rf modules/push_metrics_module/.git
+    - rm -rf modules/all_modules/.git
+  script:
+    - echo "Cleaning up deployment for branch"
+    - export BRANCH_NAME=$(echo ${CI_COMMIT_REF_NAME} | sed 's/[^a-zA-Z0-9._-]/-/g' | tr '[:upper:]' '[:lower:]')
+    - echo "Cleanup deployment for ${BRANCH_NAME}"
+    - bash scripts/build-deploy-inter.sh -dt $deploy --cleanup-deployment -n ${BRANCH_NAME}
+  tags:
+    - m01
+  when: manual
+
+# ─── Pipeline Condition Templates ─────────────────────────────────────────────
+
+# Variables only (reused by jobs that use rules: instead of except:)
+.job-phidias-test-vars: &job-phidias-test-vars-def
+  variables:
+    site: HQ
+    deploy: test
+    TZ_STR: 'Asia/Taipei'
+    issue_branch: 'FALSE'
+
+# Auto trigger - runs on push/tag commits (excludes production branches, dev branches, schedules)
+.job-phidias-test: &job-phidias-test-def
+  <<: *job-phidias-test-vars-def
+  except:
+    - /^production.*$/
+    - /^dev.*$/
+    - schedules
+
+# =================== Pipeline: Auto — Standalone Deploy (on push / on tag) ====================
+
+build-config:test:
+  <<: [*job-build-config-def, *job-phidias-test-def]
+
+build-config:production:
+  <<: *job-build-config-def
+  only:
+    - tags
+  variables:
+    site: HQ
+    deploy: production
+    TZ_STR: 'Asia/Taipei'
+  script:
+    - echo "Verifying .env for build"
+    - '[ -f .env ] || { echo "ERROR: .env not found"; exit 1; }'
+    - echo "SITE=${site:-HQ}, DEPLOY=${deploy:-production}"
+    - export SITE="${site:-HQ}"
+    - export DEPLOY="${deploy:-production}"
+    - bash $BUILD_CONFIG_SH -s $SITE -d $DEPLOY
+    - |
+      # Re-write docker_account and docker_pwd using MCPDC CI env vars so that
+      # the $ sign in robot$pegaverse is preserved and the correct mcpdc JWT is used.
+      sed -i "s|^docker_account *=.*|docker_account = ${DOCKER_ACCOUNT}|" config/config.ini
+      sed -i "s|^docker_pwd *=.*|docker_pwd = ${DOCKER_MCPDC_PWD}|" config/config.ini
+    - echo "config/config.ini ready (MCPDC credentials applied)"
+
+eslint:test:
+  <<: [*job-eslint-def, *job-phidias-test-def]
+  needs:
+    - job: build-config:test
+
+vitest:test:
+  <<: [*job-vitest-def, *job-phidias-test-def]
+  needs:
+    - job: eslint:test
+      artifacts: false
+
+build-image:standalone:test:
+  <<: *job-phidias-test-def
+  stage: build-docker
+  before_script:
+    - git -c http.sslVerify=false submodule sync --recursive
+    - git -c http.sslVerify=false submodule update --init --recursive --remote -f
+    - rm -rf ci_utils/.git
+  script:
+    - if [ -n "$CI_COMMIT_TAG" ]; then TAG_NAME="$CI_COMMIT_TAG"; else TAG_NAME="${deploy}_latest"; fi
+    - echo "Build phidias standalone docker image (tag=${TAG_NAME})"
+    - bash scripts/build-deploy-inter.sh -bs $site -dt $deploy -bi phidias-standalone --build-image-only -t ${TAG_NAME}
+  needs:
+    - job: build-config:test
+      artifacts: true    # provides .env + config/config.ini with correctly escaped credentials
+    - job: vitest:test
+      artifacts: false
+  tags:
+    - m01
+
+build-wc:test:
+  <<: [*job-build-static-latest-def, *job-phidias-test-def]
+  needs:
+    - job: vitest:test
+      artifacts: false
+
+build-wc:steady:test:
+  <<: *job-build-wc-steady-def
+  only:
+    - tags
+  needs:
+    - job: build-wc:test
+      artifacts: true  # provides dist/phidias-wc.js + initial manifest for steady build to read
+
+deploy-image:standalone:ctrdc:
+  <<: *job-phidias-test-def
+  stage: deploy-image
+  script:
+    - if [ -n "$CI_COMMIT_TAG" ]; then TAG_NAME="$CI_COMMIT_TAG"; else TAG_NAME="${deploy}_latest"; fi
+    - echo "Push phidias standalone image to CTRDC (tag=${TAG_NAME})"
+    - bash scripts/build-deploy-inter.sh -bs $site -dt $deploy -bi phidias-standalone --push-image-only -t ${TAG_NAME}
+  needs:
+    - job: build-config:test
+      artifacts: true
+    - job: build-image:standalone:test
+      artifacts: false
+  tags:
+    - m01
+
+# on push: ctrdc image (test_latest), imagePullSecrets = regcred-inter
+build-yaml:standalone:
+  <<: [*job-build-next-yaml-def, *job-phidias-test-def]
+  except:
+    - /^production.*$/
+    - /^dev.*$/
+    - schedules
+    - tags          # tag builds use build-yaml:standalone:tag instead
+  script:
+    - echo "Build phidias-next deployment YAML (push → ctrdc image, regcred-inter)"
+    - TAG_NAME="${deploy}_latest"
+    - bash scripts/build-deploy-inter.sh -bs $site -dt $deploy --build-next-yaml-only -t ${TAG_NAME}
+    - "sed -i 's/name: regcred$/name: regcred-inter/' local_output/phidias-standalone.yaml"
+  needs:
+    - job: build-config:test
+      artifacts: true
+    - job: deploy-image:standalone:ctrdc
+      artifacts: false
+
+# on tag: mcpdc image ({tag}), imagePullSecrets = regcred (already in k8s template)
+build-yaml:standalone:tag:
+  <<: [*job-build-next-yaml-def, *job-phidias-test-vars-def]
+  only:
+    - tags
+  script:
+    - echo "Build phidias-next deployment YAML (tag → mcpdc image, regcred)"
+    - bash scripts/build-deploy-inter.sh -bs $site -dt $deploy --build-next-yaml-only -t ${CI_COMMIT_TAG}
+    - sed -i "s|${DOCKER_SERVER}|${DOCKER_MCPDC_SERVER}|g" local_output/phidias-standalone.yaml
+  needs:
+    - job: build-config:test
+      artifacts: true
+    - job: deploy-image:standalone:mcpdc
+      artifacts: false
+
+build-image:static:test:
+  <<: [*job-phidias-test-def]
+  except:
+    - /^production.*$/
+    - /^dev.*$/
+    - schedules
+    - tags              # tag builds use build-image:static:tag:test instead
+  stage: build-static-docker
+  script:
+    - TAG_NAME="${deploy}_latest"
+    - echo "Build phidias static docker image (tag=${TAG_NAME})"
+    - bash scripts/build-deploy-inter.sh -bs $site -dt $deploy -bi phidias-static --build-image-only -t ${TAG_NAME}
+  needs:
+    - job: build-config:test
+      artifacts: true
+    - job: build-wc:test
+      artifacts: true
+  tags:
+    - m01
+
+build-image:static:tag:test:
+  <<: [*job-phidias-test-vars-def]
+  only:
+    - tags
+  stage: build-static-docker
+  script:
+    - TAG_NAME="${CI_COMMIT_TAG}"
+    - echo "Prepare dist/ for tag image (steady-only manifest, remove non-hashed bundle)"
+    - rm -f dist/phidias-wc.js
+    - docker run --rm -v $(pwd)/dist:/dist node:20-alpine node -e "const fs=require('fs');const m=JSON.parse(fs.readFileSync('/dist/phidias-manifest.json','utf8'));const out={};if(m.steady)out.steady=m.steady;fs.writeFileSync('/dist/phidias-manifest.json',JSON.stringify(out,null,2));console.log('tag manifest:',JSON.stringify(out));"
+    - echo "Build phidias static docker image for tag (clean base, steady-only)"
+    - bash scripts/build-deploy-inter.sh -bs $site -dt $deploy -bi phidias-static --build-image-only --tag-minimal -t ${TAG_NAME}
+  needs:
+    - job: build-config:test
+      artifacts: true
+    - job: build-wc:steady:test
+      artifacts: true   # contains phidias-wc.js + hashed bundle + full manifest (no conflict)
+  tags:
+    - m01
+
+deploy-image:static:ctrdc:
+  <<: [*job-phidias-test-def]
+  stage: deploy-image
+  script:
+    - if [ -n "$CI_COMMIT_TAG" ]; then TAG_NAME="$CI_COMMIT_TAG"; else TAG_NAME="${deploy}_latest"; fi
+    - echo "Push phidias static image to CTRDC (tag=${TAG_NAME})"
+    - bash scripts/build-deploy-inter.sh -bs $site -dt $deploy -bi phidias-static --push-image-only -t ${TAG_NAME}
+  needs:
+    - job: build-config:test
+      artifacts: true
+    - job: build-image:static:test
+      artifacts: false
+      optional: true    # non-tag builds only
+    - job: build-image:static:tag:test
+      artifacts: false
+      optional: true    # tag builds only
+  tags:
+    - m01
+
+deploy-image:standalone:mcpdc:
+  <<: *job-deploy-phidias-next-image-mcpdc-def
+  only:
+    - tags
+  needs:
+    - job: build-config:production
+      artifacts: true    # provides config.ini with docker_server = mcpdc-dockerhub.pegatroncorp.com
+    - job: build-image:standalone:test
+      artifacts: false
+
+deploy-image:static:mcpdc:
+  <<: *job-deploy-phidias-static-image-mcpdc-def
+  only:
+    - tags
+  needs:
+    - job: build-config:production
+      artifacts: true    # provides config.ini with docker_server = mcpdc-dockerhub.pegatroncorp.com
+    - job: build-image:static:tag:test
+      artifacts: false
+
+notify-teams:
+  <<: [*job-notify-teams-def, *job-phidias-test-def]
+  needs:
+    - job: deploy-image:standalone:ctrdc
+      artifacts: false
+    - job: deploy-image:static:ctrdc
+      artifacts: false
+
+# on push: ctrdc image (test_latest), imagePullSecrets = regcred-inter
+build-yaml:static:
+  <<: [*job-build-static-yaml-def, *job-phidias-test-def]
+  except:
+    - /^production.*$/
+    - /^dev.*$/
+    - schedules
+    - tags          # tag builds use build-yaml:static:tag instead
+  script:
+    - echo "Build phidias-static deployment YAML (push → ctrdc image, regcred-inter)"
+    - TAG_NAME="${deploy}_latest"
+    - bash scripts/build-deploy-inter.sh -bs $site -dt $deploy -bi phidias-static --build-static-yaml-only -t ${TAG_NAME}
+    - "sed -i 's/name: regcred$/name: regcred-inter/' local_output/phidias-static.yaml"
+  needs:
+    - job: build-config:test
+      artifacts: true
+    - job: deploy-image:static:ctrdc
+      artifacts: false
+
+# on tag: mcpdc image ({tag}), imagePullSecrets = regcred (already in k8s template)
+build-yaml:static:tag:
+  <<: [*job-build-static-yaml-def, *job-phidias-test-vars-def]
+  only:
+    - tags
+  script:
+    - echo "Build phidias-static deployment YAML (tag → mcpdc image, regcred)"
+    - bash scripts/build-deploy-inter.sh -bs $site -dt $deploy -bi phidias-static --build-static-yaml-only -t ${CI_COMMIT_TAG}
+    - sed -i "s|${DOCKER_SERVER}|${DOCKER_MCPDC_SERVER}|g" local_output/phidias-static.yaml
+  needs:
+    - job: build-config:test
+      artifacts: true
+    - job: deploy-image:static:mcpdc
+      artifacts: false
+
+deploy-cluster:standalone:
+  <<: [*job-deploy-next-def, *job-phidias-test-def]
+  needs:
+    - job: build-yaml:standalone
+      artifacts: true
+      optional: true    # push builds only
+    - job: build-yaml:standalone:tag
+      artifacts: true
+      optional: true    # tag builds only
+
+deploy-cluster:static:
+  <<: [*job-deploy-static-def, *job-phidias-test-def]
+  needs:
+    - job: build-yaml:static
+      artifacts: true
+      optional: true    # push builds only
+    - job: build-yaml:static:tag
+      artifacts: true
+      optional: true    # tag builds only
+
+# gen-release-note:
+#   <<: [*job-gen-release-note-def, *job-phidias-test-def]
+#   variables:
+#     site: HQ
+#     deploy: test
+#     TZ_STR: 'Asia/Taipei'
+#     issue_branch: 'FALSE'
+#     RELEASE_NOTE_WEBHOOK: "https://default5ab9aaef2fe64d66a5f2129a667184.6b.environment.api.powerplatform.com:443/powerautomate/automations/direct/workflows/9647c7c182cd4a9ea138cb092cc6c30e/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=Y7vt_0IUJQ4svvdkrazyL_-zQ_2vK16I6vogNMQnPHc"
+#   needs:
+#     - job: deploy-cluster:standalone
+#       artifacts: false
+
+cleanup:
+  <<: [*job-cleanup-deployment-def, *job-phidias-test-vars-def]
+  environment:
+    name: test/$CI_COMMIT_REF_NAME
+    action: stop
+  rules:
+    - if: '$CI_COMMIT_TAG'
+      when: never
+    - if: '$CI_MERGE_REQUEST_EVENT_TYPE == "merged"'
+      when: on_success
+      variables:
+        BRANCH_NAME: $CI_MERGE_REQUEST_SOURCE_BRANCH_NAME
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      when: manual
+    - if: '$CI_COMMIT_BRANCH != "master" && $CI_PIPELINE_SOURCE == "push"'
+      when: manual

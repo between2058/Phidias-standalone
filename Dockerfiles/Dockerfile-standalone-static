@@ -1,0 +1,33 @@
+# BASE_STATIC_IMAGE: the previously pushed phidias-static image, used to inherit
+# all accumulated content-hashed JS files from prior tag builds.
+# Defaults to nginx:alpine on first build (no accumulated files yet).
+# Must be declared before the first FROM so Docker expands it in the FROM instruction.
+ARG BASE_STATIC_IMAGE=nginx:alpine
+
+# Name the base as a stage so COPY --from can reference it by name (not ARG directly).
+# This works in both legacy builder and BuildKit.
+FROM ${BASE_STATIC_IMAGE} AS prev_static
+
+FROM nginx:alpine
+
+ARG CICD_PUBLISH_TOKEN
+
+# Inherit accumulated hashed JS files + old manifest from the previous image.
+# On first build BASE_STATIC_IMAGE=nginx:alpine, whose html dir is empty — no-op.
+COPY --from=prev_static /usr/share/nginx/html/ /usr/share/nginx/html/
+
+# Overlay current build output: new hashed JS + phidias-wc.js (latest) + updated manifest.
+# Files with matching names are overwritten; new tag files are added alongside old ones.
+COPY dist/ /usr/share/nginx/html/
+
+# Copy static assets from public/ (HDRI maps, sample models, images).
+# Vite lib mode does not auto-copy public/ to dist/, so we do it explicitly here.
+# These are loaded at runtime via absolute URLs (getAssetUrl uses staticBase),
+# so they must be served from this same nginx server.
+COPY public/ /usr/share/nginx/html/
+
+# CORS config: allow cross-origin script loading (same host any port, localhost)
+COPY Dockerfiles/nginx-static.conf /etc/nginx/conf.d/default.conf
+
+EXPOSE 80
+CMD ["nginx", "-g", "daemon off;"]

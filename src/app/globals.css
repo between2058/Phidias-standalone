@@ -1,0 +1,218 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  /* :root  — Next.js Standalone mode (regular document)
+     :host  — Web Component mode (Shadow DOM, shadow host element)
+     Both selectors receive identical custom property definitions so that
+     Tailwind utilities and shadcn/ui components resolve correctly in
+     either rendering context. */
+  :root,
+  :host {
+    /* ─── Original Phidias App Palette ────────────────────────────────────
+       Canvas   #1a1a2e  deep navy-indigo — viewport / canvas background
+       Panel    #1e1e36  slightly lighter  — sidebar, left/right panels
+       Card     #252542  elevated surface  — cards, inputs, dropdowns
+       Hover    #2a2a4a  hover state
+       Border   #333355  subtle border
+       Purple   #7c3aed  primary accent   — CTAs, active states, selection
+       Orange   #f5a623  secondary accent — highlights, stats, glow
+       Text1    #ffffff  primary text
+       Text2    #94a3b8  secondary text (slate-400)
+       Text3    #64748b  muted text (slate-500)
+    ──────────────────────────────────────────────────────────────────── */
+
+    /* Background layers */
+    --bg-primary: #1a1a2e;
+    /* body / 3D canvas background        */
+    --bg-panel: #1e1e36;
+    /* sidebar, left/right panels          */
+    --bg-card: #252542;
+    /* cards, dropdowns, inner surfaces    */
+    --bg-hover: #2a2a4a;
+    /* hover state                         */
+    --bg-elevated: #2e2e50;
+    /* floating elements                   */
+
+    /* Accent colours */
+    --accent-purple: #7c3aed;
+    /* primary CTA / active state       */
+    --accent-purple-dark: #6d28d9;
+    /* darker purple for hover/press    */
+    --accent-purple-light: #9b7dff;
+    /* lighter purple for glow          */
+    --accent-orange: #f5a623;
+    /* secondary highlight / stats      */
+    --accent-blue: #3b82f6;
+    /* toggle ON state                  */
+    --accent-green: #22c55e;
+    --accent-red: #ef4444;
+    --accent-indigo: #6366f1;
+    /* selection emissive glow          */
+
+    /* Text */
+    --text-primary: #ffffff;
+    --text-secondary: #94a3b8;
+    --text-muted: #64748b;
+
+    /* Borders */
+    --border: #333355;
+    --border-light: #3d3d66;
+
+    /* Extended dark-navy palette (home page / design system) */
+    --bg-darkest: #061525;
+    --bg-darker: #0A1E35;
+    --accent-gold: #D5B451;
+    --accent-gold-dark: #b89a3e;
+    --text-tertiary: #4D6E8A;
+    --border-light: #1A3A5A;
+
+    /* Controls */
+    --toggle-blue: #3b82f6;
+    --toggle-off: #4b5563;
+    --premium-crown: #f5a623;
+
+    /* ─── shadcn/ui variables ──────────────────────────────────────── */
+    --background: 240 28% 14%;
+    /* #1a1a2e — page/canvas bg        */
+    --foreground: 0 0% 100%;
+    --card: 240 29% 16%;
+    /* #1e1e36 — panel surfaces        */
+    --card-foreground: 0 0% 100%;
+    --popover: 240 28% 20%;
+    /* #252542 — popovers/dropdowns    */
+    --popover-foreground: 0 0% 100%;
+    --primary: 263 83% 58%;
+    /* #7c3aed — purple primary        */
+    --primary-foreground: 0 0% 100%;
+    --secondary: 240 28% 20%;
+    /* #252542 — secondary surfaces    */
+    --secondary-foreground: 0 0% 100%;
+    --muted: 240 28% 20%;
+    /* #252542                         */
+    --muted-foreground: 213 16% 47%;
+    /* #64748b                        */
+    --accent: 38 91% 55%;
+    /* #f5a623 — orange highlight      */
+    --accent-foreground: 240 28% 14%;
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 240 25% 27%;
+    /* #333355                         */
+    --input: 240 28% 20%;
+    /* #252542                         */
+    --ring: 263 83% 58%;
+    /* #7c3aed — purple focus ring     */
+    --chart-1: 38 91% 55%;
+    /* orange                          */
+    --chart-2: 263 83% 58%;
+    /* purple                          */
+    --chart-3: 240 25% 27%;
+    --chart-4: 217 91% 60%;
+    /* blue                            */
+    --chart-5: 213 16% 47%;
+    --radius: 0.75rem;
+  }
+}
+
+@layer base {
+  * {
+    box-sizing: border-box;
+  }
+
+  body {
+    background-color: var(--bg-primary);
+    color: var(--text-primary);
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  html {
+    height: 100%;
+  }
+
+  body {
+    height: 100%;
+    min-height: 100vh;
+  }
+}
+
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+
+  .scrollbar-thin {
+    scrollbar-width: thin;
+    scrollbar-color: var(--border) transparent;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar {
+    width: 4px;
+    height: 4px;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar-thumb {
+    background-color: #333355;
+    border-radius: 2px;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar-thumb:hover {
+    background-color: #7c3aed;
+  }
+
+  .no-scrollbar {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+@keyframes glow-sweep {
+  0% {
+    background-position: -100% center;
+  }
+
+  100% {
+    background-position: 200% center;
+  }
+}
+
+.animate-glow-pulse {
+  color: #D5B451;
+  background: linear-gradient(90deg,
+      #D5B451 0%,
+      #D5B451 35%,
+      #fff8dc 50%,
+      #D5B451 65%,
+      #D5B451 100%);
+  background-size: 200% 100%;
+  background-clip: text;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  text-shadow: none;
+  animation: glow-sweep 3s ease-in-out infinite;
+}
+
+@keyframes progress-indeterminate {
+  0% {
+    transform: translateX(-100%);
+  }
+
+  100% {
+    transform: translateX(350%);
+  }
+}
+
+.animate-progress-indeterminate {
+  animation: progress-indeterminate 1.5s ease-in-out infinite;
+}

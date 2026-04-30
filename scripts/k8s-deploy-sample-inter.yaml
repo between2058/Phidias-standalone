@@ -1,0 +1,319 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: pegaverse-portal-client__DEPLOYMENT_SUFFIX__
+  namespace: pegaverse
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: pegaverse-portal-client__DEPLOYMENT_SUFFIX__
+  template:
+    metadata:
+      labels:
+        app: pegaverse-portal-client__DEPLOYMENT_SUFFIX__
+    spec:
+      containers:
+        - name: portal-client
+          image: __HUB__/pegaverse/__CLIENT_IMG_NAME__:__TAG__
+          imagePullPolicy: Always
+          resources:
+            limits:
+              cpu: __CLCPU__
+              memory: __CLMEM__
+            requests:
+              cpu: __CRCPU__
+              memory: __CRMEM__
+          command: [ "/opt/scripts/client_init.sh" ]
+          volumeMounts:
+            - name: "config-ini-volume"
+              mountPath: "/app/config/"
+            - name: license-sa-secret
+              mountPath: /var/run/secrets/kubernetes.io/serviceaccount
+          env:
+            - name: GIT_COMMIT_TIME
+              value: "__GIT_COMMIT_TIME__"
+      volumes:
+        - name: "config-ini-volume"
+          configMap:
+            name: __CONFIG_INI__
+        - name: license-sa-secret
+          secret:
+            secretName: license-sa-secret
+      restartPolicy: Always
+      serviceAccountName: license-sa
+      serviceAccount: license-sa
+      imagePullSecrets:
+        - name: regcred-inter
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: pegaverse-portal-client__DEPLOYMENT_SUFFIX__
+  namespace: pegaverse
+  labels:
+    run: pegaverse-portal-client-service
+spec:
+  selector:
+    app: pegaverse-portal-client__DEPLOYMENT_SUFFIX__
+  type: ClusterIP
+  ports:
+    - port: 80
+      protocol: TCP
+      targetPort: 3000
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: pegaverse-portal-client__DEPLOYMENT_SUFFIX__-ext
+  namespace: pegaverse
+  labels:
+    run: pegaverse-portal-client-service-ext
+spec:
+  selector:
+    app: pegaverse-portal-client__DEPLOYMENT_SUFFIX__
+  type: NodePort
+  ports:
+    - port: 3000
+      protocol: TCP
+      nodePort: __CNODEPORT__
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: pegaverse-portal-server__DEPLOYMENT_SUFFIX__
+  namespace: pegaverse
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: pegaverse-portal-server__DEPLOYMENT_SUFFIX__
+  strategy:
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 1
+    type: RollingUpdate
+  template:
+    metadata:
+      labels:
+        app: pegaverse-portal-server__DEPLOYMENT_SUFFIX__
+    spec:
+      containers:
+        - name: portal-server
+          image: __HUB__/pegaverse/__SERVER_IMG_NAME:__TAG__
+          imagePullPolicy: Always
+          resources:
+            limits:
+              cpu: __SLCPU__
+              memory: __SLMEM__
+            requests:
+              cpu: __SRCPU__
+              memory: __SRMEM__
+          command: [ "/opt/scripts/server_init.sh" ]
+          livenessProbe:
+            httpGet:
+              path: /api/info/healthz
+              port: 9527
+            initialDelaySeconds: 30
+            periodSeconds: 120
+            failureThreshold: 5
+          readinessProbe:
+            httpGet:
+              path: /api/info/healthz
+              port: 9527
+            initialDelaySeconds: 30
+            periodSeconds: 60
+            failureThreshold: 5
+          volumeMounts:
+            - name: "config-ini-volume"
+              mountPath: "/opt/pegaverse-portal/config/"
+          env:
+          - name: GIT_COMMIT_TIME
+            value: "__GIT_COMMIT_TIME__"          
+      initContainers:
+        - command:
+            - python3
+            - /opt/scripts/update_pg_schema.py
+          image: __HUB__/pegaverse/__SERVER_IMG_NAME:__TAG__
+          imagePullPolicy: Always
+          resources:
+            limits:
+              cpu: "400m"
+              memory: "200Mi"
+            requests:
+              cpu: "50m"
+              memory: "50Mi"
+          name: init-pg-table
+          volumeMounts:
+            - name: "config-ini-volume"
+              mountPath: "/opt/pegaverse-portal/config/"
+      volumes:
+        - name: "config-ini-volume"
+          configMap:
+            name: __CONFIG_INI__
+      restartPolicy: Always
+      imagePullSecrets:
+        - name: regcred-inter
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: pegaverse-portal-server__DEPLOYMENT_SUFFIX__
+  namespace: pegaverse
+  labels:
+    run: pegaverse-portal-server-service
+spec:
+  selector:
+    app: pegaverse-portal-server__DEPLOYMENT_SUFFIX__
+  type: ClusterIP
+  ports:
+    - port: 80
+      protocol: TCP
+      targetPort: 9527
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: pegaverse-portal-server__DEPLOYMENT_SUFFIX__-ext
+  namespace: pegaverse
+  labels:
+    run: pegaverse-portal-server-service-ext
+spec:
+  selector:
+    app: pegaverse-portal-server__DEPLOYMENT_SUFFIX__
+  type: NodePort
+  ports:
+    - port: 9527
+      protocol: TCP
+      nodePort: __SNODEPORT__
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: pegaverse-portal-phidias-client__DEPLOYMENT_SUFFIX__
+  namespace: pegaverse
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: pegaverse-portal-phidias-client__DEPLOYMENT_SUFFIX__
+  template:
+    metadata:
+      labels:
+        app: pegaverse-portal-phidias-client__DEPLOYMENT_SUFFIX__
+    spec:
+      containers:
+        - name: phidias-client
+          image: __HUB__/pegaverse/pegaverse-portal-phidias-client:__TAG__
+          imagePullPolicy: Always
+          resources:
+            limits:
+              cpu: "1"
+              memory: "2Gi"
+            requests:
+              cpu: "100m"
+              memory: "256Mi"
+          env:
+            - name: GIT_COMMIT_TIME
+              value: "__GIT_COMMIT_TIME__"
+      restartPolicy: Always
+      imagePullSecrets:
+        - name: regcred-inter
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: pegaverse-portal-phidias-client__DEPLOYMENT_SUFFIX__
+  namespace: pegaverse
+  labels:
+    run: pegaverse-portal-phidias-client-service
+spec:
+  selector:
+    app: pegaverse-portal-phidias-client__DEPLOYMENT_SUFFIX__
+  type: ClusterIP
+  ports:
+    - port: 80
+      protocol: TCP
+      targetPort: 3000
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: pegaverse-portal-phidias-client__DEPLOYMENT_SUFFIX__-ext
+  namespace: pegaverse
+  labels:
+    run: pegaverse-portal-phidias-client-service-ext
+spec:
+  selector:
+    app: pegaverse-portal-phidias-client__DEPLOYMENT_SUFFIX__
+  type: NodePort
+  ports:
+    - port: 3000
+      protocol: TCP
+      nodePort: __PCNODEPORT__
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: pegaverse-portal-phidias-server__DEPLOYMENT_SUFFIX__
+  namespace: pegaverse
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: pegaverse-portal-phidias-server__DEPLOYMENT_SUFFIX__
+  template:
+    metadata:
+      labels:
+        app: pegaverse-portal-phidias-server__DEPLOYMENT_SUFFIX__
+    spec:
+      containers:
+        - name: phidias-server
+          image: __HUB__/pegaverse/pegaverse-portal-phidias-server:__TAG__
+          imagePullPolicy: Always
+          resources:
+            limits:
+              cpu: "2"
+              memory: "4Gi"
+            requests:
+              cpu: "200m"
+              memory: "512Mi"
+          env:
+            - name: GIT_COMMIT_TIME
+              value: "__GIT_COMMIT_TIME__"
+      restartPolicy: Always
+      imagePullSecrets:
+        - name: regcred-inter
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: pegaverse-portal-phidias-server__DEPLOYMENT_SUFFIX__
+  namespace: pegaverse
+  labels:
+    run: pegaverse-portal-phidias-server-service
+spec:
+  selector:
+    app: pegaverse-portal-phidias-server__DEPLOYMENT_SUFFIX__
+  type: ClusterIP
+  ports:
+    - port: 80
+      protocol: TCP
+      targetPort: 9528
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: pegaverse-portal-phidias-server__DEPLOYMENT_SUFFIX__-ext
+  namespace: pegaverse
+  labels:
+    run: pegaverse-portal-phidias-server-service-ext
+spec:
+  selector:
+    app: pegaverse-portal-phidias-server__DEPLOYMENT_SUFFIX__
+  type: NodePort
+  ports:
+    - port: 9528
+      protocol: TCP
+      nodePort: __PSNODEPORT__
+---

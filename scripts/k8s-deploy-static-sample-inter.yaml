@@ -1,0 +1,83 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: phidias-static
+  namespace: phidias
+  labels:
+    gitCommit: unknown
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: phidias-static
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  template:
+    metadata:
+      labels:
+        app: phidias-static
+    spec:
+      containers:
+        - name: phidias-static
+          image: __HUB__/pegaverse/__PHIDIAS_STATIC_IMG_NAME__:__TAG__
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 80
+          resources:
+            limits:
+              cpu: "500m"
+              memory: "256Mi"
+            requests:
+              cpu: "50m"
+              memory: "64Mi"
+          env:
+            - name: GIT_COMMIT_TIME
+              value: "__GIT_COMMIT_TIME__"
+      serviceAccountName: license-sa
+      imagePullSecrets:
+        - name: regcred
+      restartPolicy: Always
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: phidias-static
+  namespace: phidias
+  labels:
+    run: phidias-static-service
+    gitCommit: unknown
+spec:
+  selector:
+    app: phidias-static
+  type: ClusterIP
+  ports:
+    - port: 80
+      protocol: TCP
+      targetPort: 80
+---
+# Ingress: strips /phidias-static/ prefix via rewrite-target before forwarding to nginx
+# nginx then serves files from /usr/share/nginx/html/ (no subdirectory)
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: phidias-cdn-ingress
+  namespace: phidias
+  labels:
+    gitCommit: unknown
+  annotations:
+    kubernetes.io/ingress.class: nginx
+    nginx.ingress.kubernetes.io/rewrite-target: /$2
+spec:
+  rules:
+    - http:
+        paths:
+          - path: /phidias-static(/|$)(.*)
+            pathType: ImplementationSpecific
+            backend:
+              service:
+                name: phidias-static
+                port:
+                  number: 80

@@ -1,0 +1,14 @@
+{
+  "mcpServers": {
+    "phidias": {
+      "command": "/opt/homebrew/bin/node",
+      "args": ["/Users/between2058/Documents/gitlab_code/phidias-standalone/mcp-server/dist/index.js"],
+      "env": {
+        "QWEN_API_URL": "http://172.18.245.177:8190",
+        "TRELLIS2_API_URL": "http://172.18.245.177:52070",
+        "RECONVIAGEN_API_URL": "http://172.18.245.177:52069",
+        "P3SAM_API_URL": "http://172.18.245.177:5001"
+      }
+    }
+  }
+}

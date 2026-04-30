@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Phidias WC — Local Preview</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { height: 100%; font-family: system-ui, sans-serif; }
+
+    /* ── Dev toolbar ───────────────────────────────────────────────── */
+    #dev-bar {
+      position: fixed;
+      top: 0; left: 0; right: 0;
+      z-index: 9999;
+      background: #0d1117;
+      color: #e6edf3;
+      font-size: 12px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 0 12px;
+      height: 36px;
+      border-bottom: 1px solid #30363d;
+    }
+    #dev-bar label { color: #8b949e; }
+    #dev-bar input, #dev-bar select {
+      background: #161b22;
+      color: #e6edf3;
+      border: 1px solid #30363d;
+      border-radius: 4px;
+      padding: 2px 6px;
+      font-size: 12px;
+      height: 24px;
+    }
+    #dev-bar input[type="text"] { width: 200px; }
+    #dev-bar button {
+      background: #238636;
+      color: #fff;
+      border: none;
+      border-radius: 4px;
+      padding: 3px 10px;
+      font-size: 12px;
+      cursor: pointer;
+      height: 24px;
+    }
+    #dev-bar button:hover { background: #2ea043; }
+    #dev-bar .sep { width: 1px; height: 20px; background: #30363d; }
+    #dev-bar .badge {
+      background: #1f6feb;
+      color: #fff;
+      border-radius: 4px;
+      padding: 1px 6px;
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.03em;
+    }
+
+    /* ── WC mount area ─────────────────────────────────────────────── */
+    #wc-host {
+      position: absolute;
+      top: 36px; left: 0; right: 0; bottom: 0;
+    }
+    phidias-app {
+      display: block;
+      width: 100%;
+      height: 100%;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- ── Dev Toolbar ─────────────────────────────────────────────────── -->
+  <div id="dev-bar">
+    <span class="badge">WC Preview</span>
+    <div class="sep"></div>
+
+    <label>Preset:</label>
+    <select id="preset-select" onchange="applyPreset(this.value)">
+      <option value="wc-no-backend">WC mode (UI only, no backend)</option>
+      <option value="wc-local">WC mode (local backend :8080)</option>
+      <option value="standalone-nav">Standalone nav visible</option>
+    </select>
+
+    <div class="sep"></div>
+    <label>api-base-url:</label>
+    <input id="input-api" type="text" placeholder="(empty = standalone)" />
+
+    <label>host-app:</label>
+    <input id="input-host" type="text" value="pegaverse" style="width:100px" />
+
+    <label>user:</label>
+    <input id="input-user" type="text" value="admin" style="width:80px" />
+
+    <button onclick="mountWC()">Apply</button>
+  </div>
+
+  <!-- ── WC Mount Point ──────────────────────────────────────────────── -->
+  <div id="wc-host"></div>
+
+  <!-- ── WC Bundle (ESM) ─────────────────────────────────────────────── -->
+  <script type="module" src="./dist/phidias-wc.js"></script>
+
+  <script>
+    const PRESETS = {
+      'wc-no-backend': {
+        apiBaseUrl: 'http://placeholder-no-backend.local',
+        hostApp: 'pegaverse',
+        user: 'admin',
+        basePath: '',
+      },
+      'wc-local': {
+        apiBaseUrl: 'http://localhost:8080',
+        hostApp: 'pegaverse',
+        user: 'admin',
+        basePath: '',
+      },
+      'standalone-nav': {
+        apiBaseUrl: '',
+        hostApp: 'standalone',
+        user: 'admin',
+        basePath: '',
+      },
+    };
+
+    function applyPreset(key) {
+      const p = PRESETS[key];
+      if (!p) return;
+      document.getElementById('input-api').value   = p.apiBaseUrl;
+      document.getElementById('input-host').value  = p.hostApp;
+      document.getElementById('input-user').value  = p.user;
+    }
+
+    function mountWC() {
+      const host = document.getElementById('wc-host');
+
+      // Remove existing element to force full re-mount
+      const existing = host.querySelector('phidias-app');
+      if (existing) existing.remove();
+
+      const el = document.createElement('phidias-app');
+
+      const apiBaseUrl = document.getElementById('input-api').value.trim();
+      const hostApp    = document.getElementById('input-host').value.trim();
+      const user       = document.getElementById('input-user').value.trim();
+
+      if (apiBaseUrl) el.setAttribute('api-base-url', apiBaseUrl);
+      if (hostApp)    el.setAttribute('host-app',     hostApp);
+      if (user)       el.setAttribute('user',         user);
+      // base-path left empty so BrowserRouter uses '/'
+
+      host.appendChild(el);
+    }
+
+    // Auto-mount on page load once the WC script has registered the custom element
+    function waitAndMount() {
+      if (customElements.get('phidias-app')) {
+        applyPreset(document.getElementById('preset-select').value);
+        mountWC();
+      } else {
+        customElements.whenDefined('phidias-app').then(() => {
+          applyPreset(document.getElementById('preset-select').value);
+          mountWC();
+        });
+      }
+    }
+
+    waitAndMount();
+  </script>
+</body>
+</html>

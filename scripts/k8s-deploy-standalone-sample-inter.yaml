@@ -1,0 +1,93 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: phidias-standalone
+  namespace: phidias
+  labels:
+    gitCommit: unknown
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: phidias-standalone
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  template:
+    metadata:
+      labels:
+        app: phidias-standalone
+    spec:
+      containers:
+        - name: phidias-standalone
+          image: __HUB__/pegaverse/__PHIDIAS_NEXT_IMG_NAME__:__TAG__
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 3002
+          resources:
+            limits:
+              cpu: __SLCPU__
+              memory: __SLMEM__
+            requests:
+              cpu: __SRCPU__
+              memory: __SRMEM__
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 3002
+            initialDelaySeconds: 30
+            periodSeconds: 60
+            failureThreshold: 5
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 3002
+            initialDelaySeconds: 15
+            periodSeconds: 30
+            failureThreshold: 5
+          envFrom:
+            - configMapRef:
+                name: phidias-standalone-configmap
+          env:
+            - name: GIT_COMMIT_TIME
+              value: "__GIT_COMMIT_TIME__"
+      serviceAccountName: license-sa
+      imagePullSecrets:
+        - name: regcred
+      restartPolicy: Always
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: phidias-standalone
+  namespace: phidias
+  labels:
+    run: phidias-standalone-service
+    gitCommit: unknown
+spec:
+  selector:
+    app: phidias-standalone
+  type: ClusterIP
+  ports:
+    - port: 80
+      protocol: TCP
+      targetPort: 3002
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: phidias-standalone-ext
+  namespace: phidias
+  labels:
+    run: phidias-standalone-service-ext
+    gitCommit: unknown
+spec:
+  selector:
+    app: phidias-standalone
+  type: NodePort
+  ports:
+    - port: 3002
+      protocol: TCP
+      nodePort: __PHIDIAS_NODEPORT__

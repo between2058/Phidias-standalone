@@ -1,0 +1,391 @@
+'use client';
+
+import React, { useState, useCallback, useEffect, useMemo, useReducer, Suspense } from 'react';
+import dynamic from 'next/dynamic';
+import { useWorkspace } from '@/lib/workspace-context';
+import type { HierarchyItem } from '@/components/shared/HierarchyPanel';
+import { usePhysicsStore } from '@/store/physics-store';
+import type { PhysicsPart } from '@/store/physics-store';
+import { useSegmentStore } from '@/store/segment-store';
+import RenderModeSelector from '@/components/shared/RenderModeSelector';
+import type { RenderMode } from '@/components/shared/ThreeViewport';
+import PhysicsEditorPanel from '@/components/physics/PhysicsEditorPanel';
+
+const JointVisualizer = dynamic(
+  () => import('@/components/physics/JointVisualizer'),
+  { ssr: false }
+);
+const AnchorGizmo = dynamic(
+  () => import('@/components/physics/AnchorGizmo'),
+  { ssr: false }
+);
+const MotionPreviewController = dynamic(
+  () => import('@/components/physics/MotionPreviewController'),
+  { ssr: false }
+);
+
+const ThreeViewport = dynamic(
+  () => import('@/components/shared/ThreeViewport'),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="w-full h-full flex items-center justify-center bg-[#1a1a2e]">
+        <div className="flex flex-col items-center">
+          <div className="relative w-10 h-10">
+            <div
+              className="absolute inset-0 rounded-full animate-spin"
+              style={{
+                border: '2px solid transparent',
+                borderTopColor: '#D5B451',
+                borderRightColor: 'rgba(213,180,81,0.3)',
+              }}
+            />
+            <div
+              className="absolute inset-1.5 rounded-full animate-spin"
+              style={{
+                border: '1.5px solid transparent',
+                borderBottomColor: 'rgba(139,124,200,0.6)',
+                animationDirection: 'reverse',
+                animationDuration: '1.5s',
+              }}
+            />
+          </div>
+          <p className="text-[#64748b] text-[11px] mt-3 tracking-wide">
+            Loading viewport
+          </p>
+        </div>
+      </div>
+    ),
+  },
+);
+
+// ─── Types ──────────────────────────────────────────────────────────────────
+
+export type EditorTab = 'parts' | 'materials' | 'joints';
+
+// ─── Page ───────────────────────────────────────────────────────────────────
+
+export default function PhysicsPage() {
+  const { assets, activeAssetId, updateAssetThumbnail, updateAsset } =
+    useWorkspace();
+  // Local adapter: new workspace-context no longer exposes the
+  // segment→physics bridge (`pendingPhysicsData` / `setPendingPhysicsData`).
+  // Stubbing here keeps this page self-contained without modifying the shared
+  // context. If the bridge is re-introduced upstream, wire these back via
+  // `useWorkspace()`.
+  type PendingPhysicsData = { modelUrl: string; hierarchy: HierarchyItem[] } | null;
+  const [pendingPhysicsData, setPendingPhysicsData] = useState<PendingPhysicsData>(null);
+  const activeModelUrl =
+    assets.find((a) => a.id === activeAssetId)?.modelUrl ?? null;
+
+  // Store state
+  const parts = usePhysicsStore((s) => s.parts);
+  const setParts = usePhysicsStore((s) => s.setParts);
+  const setJoints = usePhysicsStore((s) => s.setJoints);
+  const selectedPartId = usePhysicsStore((s) => s.selectedPartId);
+  const setSelectedPartId = usePhysicsStore((s) => s.setSelectedPartId);
+  const setSelectedJointId = usePhysicsStore((s) => s.setSelectedJointId);
+
+  // Render mode
+  const [renderMode, setRenderMode] = useState<RenderMode>('textured');
+
+  // Color view mode: 'colored' shows part colors, 'original' shows native textures
+  const [colorViewMode, setColorViewMode] = useState<'original' | 'colored'>('colored');
+
+  // Editor tab
+  const [editorTab, setEditorTab] = useState<EditorTab>('parts');
+
+  // Bottom panel collapsed state
+  const [panelCollapsed, setPanelCollapsed] = useState(false);
+
+  // Grid and axes
+  const [showGrid] = useState(true);
+  const [showAxes] = useState(true);
+
+  // ── Undo / Redo state ─────────────────────────────────────────────────────
+  // Zundo's temporal.subscribe pattern (same approach as segment page)
+  const [, rerender] = useReducer((x: number) => x + 1, 0);
+
+  useEffect(() => {
+    let prevPast = usePhysicsStore.temporal.getState().pastStates.length;
+    let prevFuture = usePhysicsStore.temporal.getState().futureStates.length;
+
+    const unsub = usePhysicsStore.temporal.subscribe(() => {
+      const { pastStates, futureStates } =
+        usePhysicsStore.temporal.getState();
+      const curPast = pastStates.length;
+      const curFuture = futureStates.length;
+
+      // Trigger re-render to keep undo/redo button disabled state in sync
+      if (curPast !== prevPast || curFuture !== prevFuture) {
+        rerender();
+      }
+
+      prevPast = curPast;
+      prevFuture = curFuture;
+    });
+    return unsub;
+  }, []);
+
+  const canUndo =
+    usePhysicsStore.temporal.getState().pastStates.length > 0;
+  const canRedo =
+    usePhysicsStore.temporal.getState().futureStates.length > 0;
+
+  const handleUndo = useCallback(() => {
+    if (usePhysicsStore.temporal.getState().pastStates.length > 0) {
+      usePhysicsStore.temporal.getState().undo();
+    }
+  }, []);
+
+  const handleRedo = useCallback(() => {
+    if (usePhysicsStore.temporal.getState().futureStates.length > 0) {
+      usePhysicsStore.temporal.getState().redo();
+    }
+  }, []);
+
+  // ── Cleanup on unmount: stop auto-play to prevent R3F hook errors ────────
+  useEffect(() => {
+    return () => {
+      usePhysicsStore.getState().setAutoPlaying(false);
+      usePhysicsStore.getState().setJointPreviewValue(null);
+    };
+  }, []);
+
+  // ── Keyboard shortcuts: Cmd/Ctrl+Z / Cmd/Ctrl+Shift+Z ────────────────────
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      const ctrl = e.ctrlKey || e.metaKey;
+      if (!ctrl || e.key.toLowerCase() !== 'z') return;
+      e.preventDefault();
+      if (e.shiftKey) {
+        handleRedo();
+      } else {
+        handleUndo();
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [handleUndo, handleRedo]);
+
+  // ── Receive pending data from Segment → Physics bridge ───────────────────
+  useEffect(() => {
+    if (!pendingPhysicsData) return;
+
+    function flattenLeafNodes(items: HierarchyItem[]): HierarchyItem[] {
+      const leaves: HierarchyItem[] = [];
+      function walk(nodes: HierarchyItem[]) {
+        for (const n of nodes) {
+          if (!n.children || n.children.length === 0) {
+            leaves.push(n);
+          } else {
+            walk(n.children);
+          }
+        }
+      }
+      walk(items);
+      return leaves;
+    }
+
+    const leafNodes = flattenLeafNodes(pendingPhysicsData.hierarchy);
+    const newParts: PhysicsPart[] = leafNodes.map((item, i, arr) => ({
+      id: item.id,
+      name: item.name || `Part_${i}`,
+      color: `hsl(${(i * 360) / arr.length}, 70%, 60%)`,
+      type: 'link' as const,
+      role: 'other' as const,
+      mobility: 'fixed' as const,
+      mass: null,
+      density: 1000,
+      collisionType: 'convexHull' as const,
+      staticFriction: 0.5,
+      dynamicFriction: 0.3,
+      restitution: 0.3,
+      materialId: null,
+      isMaterialCustom: false,
+      originalMaterial: null,
+      vertexCount: 0,
+    }));
+
+    setParts(newParts);
+    setJoints([]);
+    usePhysicsStore.temporal.getState().clear();
+    setPendingPhysicsData(null);
+  }, [pendingPhysicsData, setParts, setJoints, setPendingPhysicsData]);
+
+  // ── Auto-populate parts from scene graph ──────────────────────────────────
+  const handleSceneGraphChange = useCallback((nodes: HierarchyItem[]) => {
+    // Flatten to mesh leaf nodes
+    const meshes: HierarchyItem[] = [];
+    function walk(items: HierarchyItem[]) {
+      for (const n of items) {
+        if (n.type === 'mesh') meshes.push(n);
+        if (n.children) walk(n.children);
+      }
+    }
+    walk(nodes);
+
+    if (meshes.length === 0) return;
+
+    // Check if parts already match (avoid re-populating on every scene graph update)
+    const currentParts = usePhysicsStore.getState().parts;
+    const currentIds = new Set(currentParts.map((p) => p.id));
+    const meshIds = meshes.map((m) => m.id);
+    const isNewModel = currentParts.length === 0 || meshIds.some((id) => !currentIds.has(id));
+
+    if (!isNewModel) return;
+
+    const PHYSICS_PALETTE = [
+      '#ef4444', '#3b82f6', '#22c55e', '#f59e0b',
+      '#8b5cf6', '#ec4899', '#06b6d4', '#84cc16',
+      '#f97316', '#a855f7', '#14b8a6', '#eab308',
+    ];
+
+    // Check segment store for user-edited names/colors (from rename, merge, group)
+    const segParts = useSegmentStore.getState().parts;
+    // Build lookup: meshId → segment part (a segment part can own multiple meshIds via merge)
+    const meshToSegPart = new Map<string, { name: string; color: string }>();
+    for (const sp of segParts) {
+      if (sp.isGroup) continue; // skip group folders
+      for (const mid of sp.meshIds) {
+        meshToSegPart.set(mid, { name: sp.name, color: sp.color });
+      }
+    }
+
+    const newParts: PhysicsPart[] = meshes.map((m, i) => {
+      const seg = meshToSegPart.get(m.id);
+      return {
+        id: m.id,
+        name: seg?.name || m.name || `Part_${i}`,
+        color: seg?.color || PHYSICS_PALETTE[i % PHYSICS_PALETTE.length],
+        type: 'link' as const,
+        role: 'other' as const,
+        mobility: 'fixed' as const,
+        mass: null,
+        density: 1000,
+        collisionType: 'convexHull' as const,
+        staticFriction: 0.5,
+        dynamicFriction: 0.3,
+        restitution: 0.3,
+        materialId: null,
+        isMaterialCustom: false,
+        originalMaterial: null,
+        vertexCount: 0,
+      };
+    });
+
+    setParts(newParts);
+    usePhysicsStore.temporal.getState().clear();
+  }, [setParts]);
+
+  // ── Segment colors for colored mesh display ───────────────────────────────
+  const segmentColors = useMemo(() => {
+    if (colorViewMode === 'original') return {};
+    const colors: Record<string, string> = {};
+    for (const part of parts) {
+      if (part.color) {
+        colors[part.id] = part.color;
+      }
+    }
+    return colors;
+  }, [parts, colorViewMode]);
+
+  // ── Object select callback ────────────────────────────────────────────────
+  const handleObjectSelect = useCallback(
+    (id: string | null) => {
+      setSelectedPartId(id);
+      setSelectedJointId(null);
+    },
+    [setSelectedPartId, setSelectedJointId],
+  );
+
+  return (
+    <div
+      className="flex flex-col h-full overflow-hidden relative"
+      style={{ background: '#1a1a2e' }}
+    >
+      {/* ── Viewport area ──────────────────────────────────────────────────── */}
+      <main
+        className="flex-1 relative overflow-hidden"
+        style={{ minHeight: 0 }}
+      >
+        <Suspense fallback={null}>
+          <ThreeViewport
+            modelUrl={activeModelUrl ?? ''}
+            renderMode={renderMode}
+            segmentColors={segmentColors}
+            selectedObjectId={selectedPartId}
+            onObjectSelect={handleObjectSelect}
+            showGrid={showGrid}
+            showAxes={showAxes}
+            onSceneGraphChange={handleSceneGraphChange}
+            onThumbnailReady={(dataUrl) => {
+              if (activeAssetId) updateAssetThumbnail(activeAssetId, dataUrl);
+            }}
+            onHasSkinnedMesh={(v) => {
+              if (activeAssetId)
+                updateAsset(activeAssetId, { hasSkinnedMesh: v });
+            }}
+            colorViewMode={colorViewMode}
+            onColorViewModeChange={setColorViewMode}
+            className="w-full h-full"
+          >
+            <JointVisualizer />
+            <AnchorGizmo />
+            <MotionPreviewController />
+          </ThreeViewport>
+        </Suspense>
+
+        {/* Render mode selector */}
+        <RenderModeSelector
+          availableModes={['textured', 'solid', 'wireframe', 'normal']}
+          current={renderMode}
+          onChange={setRenderMode}
+          className="absolute bottom-20 left-1/2 -translate-x-1/2 z-10"
+        />
+
+        {/* Floating undo/redo toolbar */}
+        <div
+          className="absolute bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-2 px-4 py-2.5 rounded-full z-10"
+          style={{
+            background: 'rgba(13,13,24,0.95)',
+            border: '1px solid #333355',
+          }}
+        >
+          <button
+            className={`w-8 h-8 rounded-lg flex items-center justify-center text-sm transition-colors ${
+              canUndo
+                ? 'text-[#94a3b8] hover:text-white hover:bg-[#252542]'
+                : 'text-[#3d3d5c] cursor-not-allowed'
+            }`}
+            title="Undo (Ctrl+Z)"
+            onClick={handleUndo}
+            disabled={!canUndo}
+          >
+            ↩
+          </button>
+          <button
+            className={`w-8 h-8 rounded-lg flex items-center justify-center text-sm transition-colors ${
+              canRedo
+                ? 'text-[#94a3b8] hover:text-white hover:bg-[#252542]'
+                : 'text-[#3d3d5c] cursor-not-allowed'
+            }`}
+            title="Redo (Ctrl+Shift+Z)"
+            onClick={handleRedo}
+            disabled={!canRedo}
+          >
+            ↪
+          </button>
+        </div>
+      </main>
+
+      {/* ── Bottom editor panel ────────────────────────────────────────────── */}
+      <PhysicsEditorPanel
+        activeTab={editorTab}
+        onTabChange={setEditorTab}
+        collapsed={panelCollapsed}
+        onToggleCollapse={() => setPanelCollapsed((c) => !c)}
+      />
+    </div>
+  );
+}
