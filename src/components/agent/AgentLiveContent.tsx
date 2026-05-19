@@ -26,6 +26,7 @@ import {
   useAgentLive,
   isModelEvent,
   isImageEvent,
+  isPhysicsConfigEvent,
 } from './AgentLiveProvider';
 import type { McpStreamEvent, McpStreamStatus } from '@/hooks/useMcpStream';
 
@@ -183,20 +184,27 @@ function EventRow({
 
 function ChainCard({
   group,
-  onLoad,
+  onLoadModel,
+  onLoadPhysics,
 }: {
   group: ChainGroup;
-  onLoad: (e: McpStreamEvent) => void;
+  onLoadModel: (e: McpStreamEvent) => void;
+  onLoadPhysics: (e: McpStreamEvent) => void;
 }) {
   const [open, setOpen] = useState(false);
   const { headline, history } = group;
   const isImg = isImageEvent(headline);
   const stages = history.length;
-  // Find the newest loadable model in the chain so a click on the
-  // headline (or auto-load behavior) targets it instead of e.g. a
-  // physics config that can't render in the viewport.
+  // Find the newest loadable model and the newest physics config in the
+  // chain. Clicking the headline restores BOTH so motion preview for a
+  // past sim-ready asset comes back, not just the viewport mesh.
   const newestModel = history.find((e) => isModelEvent(e) && !!e.file_url);
-  const headlineLoadable = !!newestModel;
+  const newestPhysics = history.find((e) => isPhysicsConfigEvent(e) && !!e.file_url);
+  const headlineLoadable = !!newestModel || !!newestPhysics;
+  const loadChain = () => {
+    if (newestModel) onLoadModel(newestModel);
+    if (newestPhysics) onLoadPhysics(newestPhysics);
+  };
 
   const fileName = suggestedFileName(headline);
 
@@ -208,7 +216,7 @@ function ChainCard({
             ? 'cursor-pointer hover:bg-purple-500/10'
             : ''
         }`}
-        onClick={() => newestModel && onLoad(newestModel)}
+        onClick={() => headlineLoadable && loadChain()}
       >
         <div className="flex items-center justify-between text-[10px] uppercase tracking-wide gap-1">
           <span className="text-purple-300 truncate max-w-[55%]">
@@ -262,14 +270,18 @@ function ChainCard({
       </div>
       {open && stages > 1 && (
         <div className="border-t border-purple-500/20 p-2 space-y-1.5 bg-black/20">
-          {history.map((h) => (
-            <EventRow
-              key={`${h.asset_id}-${h.timestamp}`}
-              event={h}
-              loadable={isModelEvent(h) && !!h.file_url}
-              onLoad={onLoad}
-            />
-          ))}
+          {history.map((h) => {
+            const isModel = isModelEvent(h) && !!h.file_url;
+            const isPhysics = isPhysicsConfigEvent(h) && !!h.file_url;
+            return (
+              <EventRow
+                key={`${h.asset_id}-${h.timestamp}`}
+                event={h}
+                loadable={isModel || isPhysics}
+                onLoad={isPhysics ? onLoadPhysics : onLoadModel}
+              />
+            );
+          })}
         </div>
       )}
     </div>
@@ -292,6 +304,7 @@ export default function AgentLiveContent() {
     connect,
     disconnect,
     loadModelInViewport,
+    loadPhysicsConfig,
   } = live;
 
   const groups = useMemo(() => groupEventsByChain(events), [events]);
@@ -382,7 +395,8 @@ export default function AgentLiveContent() {
           <ChainCard
             key={g.rootKey}
             group={g}
-            onLoad={loadModelInViewport}
+            onLoadModel={loadModelInViewport}
+            onLoadPhysics={loadPhysicsConfig}
           />
         ))}
       </div>

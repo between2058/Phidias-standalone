@@ -86,6 +86,10 @@ interface Ctx {
   hydrated: boolean;
   // Manual model load action (used by clickable cards even when autoload off)
   loadModelInViewport: (e: McpStreamEvent) => void;
+  // Manual physics-config import. Fetches the JSON, applies parts/joints,
+  // and updates the auto-import dedup ref. Pair with loadModelInViewport
+  // when re-loading a past chain.
+  loadPhysicsConfig: (e: McpStreamEvent) => void;
 }
 
 const AgentLiveContext = createContext<Ctx | null>(null);
@@ -192,36 +196,39 @@ export function AgentLiveProvider({ children }: { children: React.ReactNode }) {
 
   // Auto-import physics config
   const lastImportedConfigRef = useRef<string | null>(null);
+  const loadPhysicsConfig = useCallback(
+    (e: McpStreamEvent) => {
+      if (!e.file_url || !e.asset_id) return;
+      if (lastImportedConfigRef.current === e.asset_id) return;
+      lastImportedConfigRef.current = e.asset_id;
+      fetch(e.file_url)
+        .then((r) => {
+          if (!r.ok) throw new Error(`physics JSON HTTP ${r.status}`);
+          return r.json();
+        })
+        .then((cfg: { parts?: PhysicsPart[]; joints?: PhysicsJoint[] }) => {
+          if (!Array.isArray(cfg.parts) || !Array.isArray(cfg.joints)) {
+            console.warn('[AgentLive] physics config missing parts/joints', cfg);
+            return;
+          }
+          setPhysicsParts(cfg.parts);
+          setPhysicsJoints(cfg.joints);
+        })
+        .catch((err) => {
+          console.warn('[AgentLive] physics config import failed:', err);
+        });
+    },
+    [setPhysicsParts, setPhysicsJoints],
+  );
+
   useEffect(() => {
     if (!autoLoad) return;
     const latest = [...events]
       .reverse()
       .find((e) => isPhysicsConfigEvent(e) && !!e.file_url);
-    if (!latest || !latest.asset_id) return;
-    if (lastImportedConfigRef.current === latest.asset_id) return;
-    lastImportedConfigRef.current = latest.asset_id;
-    let cancelled = false;
-    fetch(latest.file_url as string)
-      .then((r) => {
-        if (!r.ok) throw new Error(`physics JSON HTTP ${r.status}`);
-        return r.json();
-      })
-      .then((cfg: { parts?: PhysicsPart[]; joints?: PhysicsJoint[] }) => {
-        if (cancelled) return;
-        if (!Array.isArray(cfg.parts) || !Array.isArray(cfg.joints)) {
-          console.warn('[AgentLive] physics config missing parts/joints', cfg);
-          return;
-        }
-        setPhysicsParts(cfg.parts);
-        setPhysicsJoints(cfg.joints);
-      })
-      .catch((err) => {
-        console.warn('[AgentLive] physics config auto-import failed:', err);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [events, autoLoad, setPhysicsParts, setPhysicsJoints]);
+    if (!latest) return;
+    loadPhysicsConfig(latest);
+  }, [events, autoLoad, loadPhysicsConfig]);
 
   const toggleAutoLoad = useCallback(() => {
     setAutoLoad((v) => {
@@ -252,6 +259,7 @@ export function AgentLiveProvider({ children }: { children: React.ReactNode }) {
     toggleAutoLoad,
     hydrated,
     loadModelInViewport,
+    loadPhysicsConfig,
   };
 
   return (

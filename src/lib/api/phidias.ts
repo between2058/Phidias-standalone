@@ -921,16 +921,29 @@ export async function exportArticulationUsdz(
 
 /**
  * Download an articulation export file by filename.
- * Ported verbatim from old repo phidias.ts lines 923-931 (commit 85f68d6).
+ *
+ * USES `fetch` DIRECTLY, NOT `client`. The shared client auto-detects the
+ * response shape from `content-type`: USDZ (`model/vnd.usdz+zip`) is parsed
+ * as Blob, but USDA is served by the articulation backend as `text/plain`
+ * (see articulation-service/app/api/routes.py:399) which the client routes
+ * to `.text()` → string. `URL.createObjectURL(string)` then throws
+ * "Argument 1 could not be converted to any of: Blob, MediaSource". By
+ * calling `response.blob()` here we get a Blob regardless of content-type.
  */
 export async function downloadArticulationFile(
   filename: string,
 ): Promise<Blob> {
-  const { data } = await client.get<Blob>(
+  const response = await fetch(
     `${getBackendApi()}/phidias/articulation/download/${filename}`,
-    { timeout: 60000 },
+    { credentials: 'same-origin' },
   );
-  return data;
+  if (!response.ok) {
+    const detail = await response.text().catch(() => '');
+    throw new Error(
+      `Download failed: HTTP ${response.status} ${detail || response.statusText}`,
+    );
+  }
+  return response.blob();
 }
 
 /**
