@@ -9,8 +9,10 @@
     "lint": "next lint",
     "build:wc": "vite build --config vite.wc.config.mts",
     "build:wc:steady": "vite build --config vite.wc.config.mts --mode steady",
-    "dev:wc": "vite build --config vite.wc.config.mts --watch",
+    "build:wc:dev": "vite build --config vite.wc.config.mts --mode development",
     "preview:wc": "bash scripts/preview-wc.sh",
+    "preview:wc:dev": "bash scripts/preview-wc.sh development",
+    "preview:wc:steady": "bash scripts/preview-wc.sh steady",
     "test": "vitest run",
     "test:watch": "vitest",
     "e2e": "playwright test --project=developer",
@@ -19,7 +21,7 @@
     "e2e:ui": "playwright test --ui"
   },
   "dependencies": {
-    "@pegaverse/phidias-sdk": "file:./local-stubs/phidias-sdk",
+    "@pegaverse/phidias-sdk": "^1.0.0",
     "@playcanvas/react": "^0.11.3",
     "@react-three/drei": "^9.122.0",
     "@react-three/fiber": "^8.18.0",
