@@ -96,7 +96,7 @@ export function CADRecordGrid({ filters, onFacetsUpdate, onSelect, selectedId }:
   }
 
   return (
-    <div className="overflow-auto px-4 py-3">
+    <div className="h-full overflow-y-auto overflow-x-hidden px-4 py-3">
       <div className="grid grid-cols-[repeat(auto-fill,minmax(180px,1fr))] gap-3">
         {records.map((r) => (
           <CADRecordCard key={r.record_id} record={r} selected={selectedId === r.record_id} onSelect={onSelect} />
