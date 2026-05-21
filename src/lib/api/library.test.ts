@@ -1,5 +1,7 @@
 import { describe, expect, it, beforeEach, vi, afterEach } from 'vitest';
-import { browseRecords, getSummary, getStatus, fileUrl, type BrowseResponse } from './library';
+import { browseRecords, getSummary, getStatus, fileUrl, type BrowseResponse, type RecordSummary } from './library';
+import sampleBrowse from '../../components/cad/__fixtures__/sample-browse-response.json';
+import sampleSummary from '../../components/cad/__fixtures__/sample-record-summary.json';
 
 describe('browseRecords', () => {
   beforeEach(() => {
@@ -67,5 +69,25 @@ describe('getStatus', () => {
     global.fetch = vi.fn().mockResolvedValue({ ok: true, json: async () => ({}) });
     await getStatus();
     expect((global.fetch as any).mock.calls[0][0]).toBe('/api/library/bootstrap');
+  });
+});
+
+describe('schema contract', () => {
+  it('BrowseResponse fixture matches the TS type shape at runtime', () => {
+    const r = sampleBrowse as BrowseResponse;
+    expect(typeof r.source).toBe('string');
+    expect(typeof r.total).toBe('number');
+    expect(Array.isArray(r.records)).toBe(true);
+    expect(typeof r.facets).toBe('object');
+    expect(Array.isArray(r.facets.categories)).toBe(true);
+  });
+
+  it('RecordSummary fixture has the required fields', () => {
+    const s = sampleSummary as RecordSummary;
+    expect(typeof s.record_id).toBe('string');
+    expect(typeof s.title).toBe('string');
+    expect(typeof s.prompt_preview).toBe('string');
+    expect(typeof s.agent_harness).toBe('string');
+    expect(typeof s.has_traces).toBe('boolean');
   });
 });
