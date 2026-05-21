@@ -104,7 +104,7 @@ async function attachVisuals(
           loadMeshVisual(visual, linkGroup, resolver, urdfPath),
         );
       } else {
-        const mesh = buildPrimitiveMesh(visual.geometry);
+        const mesh = buildPrimitiveMesh(visual.geometry, visual.material);
         if (mesh) {
           if (visual.origin) {
             mesh.applyMatrix4(originToMatrix4(visual.origin));
@@ -126,7 +126,7 @@ async function loadMeshVisual(
   resolver: MeshResolver,
   urdfPath: string,
 ): Promise<void> {
-  const meshGroup = await loadGeometryObject(visual.geometry, resolver, urdfPath);
+  const meshGroup = await loadGeometryObject(visual.geometry, resolver, urdfPath, visual.material);
   if (visual.origin) {
     meshGroup.applyMatrix4(originToMatrix4(visual.origin));
   }

@@ -19,14 +19,16 @@ export class UrdfRobot {
     const joint = this.joints.find((j) => j.name === name);
     const obj = this.jointObjects.get(name);
     if (!joint || !obj) return;
+    // The joint origin is already applied to the parent joint-frame group in
+    // buildSceneGraph; the motion node's local matrix must therefore be ONLY
+    // the joint motion (rotation for revolute, translation for prismatic).
+    // Applying joint.origin here again would double-shift the child link.
     if (joint.type === 'revolute' || joint.type === 'continuous') {
-      obj.matrix.copy(joint.origin);
-      obj.matrix.multiply(new THREE.Matrix4().makeRotationAxis(joint.axis, value));
+      obj.matrix.makeRotationAxis(joint.axis, value);
       obj.matrix.decompose(obj.position, obj.quaternion, obj.scale);
     } else if (joint.type === 'prismatic') {
-      obj.matrix.copy(joint.origin);
       const t = new THREE.Vector3().copy(joint.axis).multiplyScalar(value);
-      obj.matrix.multiply(new THREE.Matrix4().makeTranslation(t.x, t.y, t.z));
+      obj.matrix.makeTranslation(t.x, t.y, t.z);
       obj.matrix.decompose(obj.position, obj.quaternion, obj.scale);
     }
     obj.updateMatrixWorld(true);

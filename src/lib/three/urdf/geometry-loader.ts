@@ -1,8 +1,44 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { OBJLoader } from 'three/examples/jsm/loaders/OBJLoader.js';
-import type { UrdfVisualGeometry } from './urdf-parser';
+import type { UrdfVisual, UrdfVisualGeometry } from './urdf-parser';
 import type { MeshResolver } from './MeshResolver';
+
+/**
+ * Build a MeshStandardMaterial from a parsed URDF visual material spec.
+ * Falls back to a neutral grey if no material or no color is present.
+ */
+function materialFromUrdf(material: UrdfVisual['material']): THREE.MeshStandardMaterial {
+  const mat = new THREE.MeshStandardMaterial({
+    color: 0xbcbcbc,
+    metalness: 0.05,
+    roughness: 0.85,
+  });
+  const rgba = material?.color?.rgba;
+  if (rgba) {
+    mat.color.setRGB(rgba[0], rgba[1], rgba[2]);
+    if (rgba[3] !== undefined && rgba[3] < 1) {
+      mat.transparent = true;
+      mat.opacity = rgba[3];
+    }
+  }
+  return mat;
+}
+
+function overrideMaterials(root: THREE.Object3D, material: UrdfVisual['material']): void {
+  const rgba = material?.color?.rgba;
+  if (!rgba) return;
+  root.traverse((child) => {
+    if (!(child instanceof THREE.Mesh)) return;
+    const replacement = materialFromUrdf(material);
+    if (Array.isArray(child.material)) {
+      child.material.forEach((m) => m.dispose());
+    } else {
+      child.material?.dispose?.();
+    }
+    child.material = replacement;
+  });
+}
 
 const geometryTemplateCache = new Map<string, Promise<THREE.Object3D>>();
 
@@ -83,6 +119,7 @@ function applyLoadedMeshPresentation(root: THREE.Object3D): void {
  */
 export function buildPrimitiveMesh(
   geometry: UrdfVisualGeometry,
+  material?: UrdfVisual['material'],
 ): THREE.Mesh | null {
   let bufferGeometry: THREE.BufferGeometry;
 
@@ -109,8 +146,7 @@ export function buildPrimitiveMesh(
       return null;
   }
 
-  const material = new THREE.MeshStandardMaterial({ color: 0xbcbcbc });
-  const mesh = new THREE.Mesh(bufferGeometry, material);
+  const mesh = new THREE.Mesh(bufferGeometry, materialFromUrdf(material));
   mesh.castShadow = true;
   mesh.receiveShadow = true;
 
@@ -126,6 +162,7 @@ export async function loadGeometryObject(
   geometry: UrdfVisualGeometry,
   resolver: MeshResolver,
   urdfPath?: string,
+  material?: UrdfVisual['material'],
 ): Promise<THREE.Group> {
   if (geometry.type !== 'mesh' || !geometry.filename) {
     throw new Error(`loadGeometryObject requires a mesh geometry with a filename`);
@@ -145,5 +182,10 @@ export async function loadGeometryObject(
   group.add(cloneCachedObject(template));
   group.scale.set(scale[0], scale[1], scale[2]);
   applyLoadedMeshPresentation(group);
+  // URDF <material> overrides any mesh-bundled material so the rack panels,
+  // gold accents, etc. show their declared colors instead of the bundled grey.
+  if (material?.color?.rgba) {
+    overrideMaterials(group, material);
+  }
   return group;
 }

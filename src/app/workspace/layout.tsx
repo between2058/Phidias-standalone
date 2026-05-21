@@ -1,5 +1,6 @@
 'use client';
 
+import { usePathname } from 'next/navigation';
 import TopNavBar from '@/components/shared/TopNavBar';
 import LeftIconSidebar from '@/components/shared/LeftIconSidebar';
 import AssetsPanel from '@/components/shared/AssetsPanel';
@@ -18,6 +19,10 @@ export default function WorkspaceLayout({ children }: WorkspaceLayoutProps) {
     return hostApp;
   }
   const hostApp = getHostApp();
+  // The CAD tab manages its own right-hand inspector and does not host
+  // Phidias-generated assets, so the shared AssetsPanel is suppressed there.
+  const pathname = usePathname();
+  const hideAssetsPanel = pathname?.startsWith('/workspace/cad') ?? false;
 
   // Start job polling for the entire workspace
   useJobPolling();
@@ -32,7 +37,7 @@ export default function WorkspaceLayout({ children }: WorkspaceLayoutProps) {
         <div className="flex flex-1 overflow-hidden">
           <LeftIconSidebar />
           <main className="flex-1 overflow-hidden">{children}</main>
-          <AssetsPanel />
+          {!hideAssetsPanel && <AssetsPanel />}
         </div>
       </div>
       {/* Full-screen image overlay — shared across all workspace pages */}
