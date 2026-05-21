@@ -19,7 +19,7 @@ const sample = {
   has_provenance: true,
   has_cost: true,
   // remaining nullable fields set to null
-} as RecordSummary;
+} as unknown as RecordSummary;
 
 describe('CADRecordCard', () => {
   it('shows title, rating, category', () => {
