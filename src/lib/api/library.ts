@@ -81,3 +81,42 @@ export class LibraryApiError extends Error {
 }
 
 const BASE = '/api/library';
+
+function appendParam(usp: URLSearchParams, key: string, value: unknown) {
+  if (value === undefined || value === null || value === '') return;
+  if (Array.isArray(value)) {
+    for (const v of value) usp.append(key, String(v));
+  } else {
+    usp.set(key, String(value));
+  }
+}
+
+function serializeBrowseFilters(f: BrowseFilters): string {
+  const usp = new URLSearchParams();
+  appendParam(usp, 'source', f.source);
+  appendParam(usp, 'q', f.q);
+  appendParam(usp, 'time', f.time);
+  appendParam(usp, 'time_from', f.time_from);
+  appendParam(usp, 'time_to', f.time_to);
+  appendParam(usp, 'model', f.model);
+  appendParam(usp, 'sdk', f.sdk);
+  appendParam(usp, 'agent_harness', f.agent_harness);
+  appendParam(usp, 'author', f.author);
+  appendParam(usp, 'category', f.category);
+  appendParam(usp, 'cost_min', f.cost_min);
+  appendParam(usp, 'cost_max', f.cost_max);
+  appendParam(usp, 'rating', f.rating);
+  appendParam(usp, 'secondary_rating', f.secondary_rating);
+  appendParam(usp, 'offset', f.offset);
+  appendParam(usp, 'limit', f.limit);
+  return usp.toString();
+}
+
+export async function browseRecords(filters: BrowseFilters): Promise<BrowseResponse> {
+  const qs = serializeBrowseFilters(filters);
+  const res = await fetch(`${BASE}/records/browse?${qs}`);
+  if (!res.ok) {
+    throw new LibraryApiError(res.status, await res.text());
+  }
+  return (await res.json()) as BrowseResponse;
+}
