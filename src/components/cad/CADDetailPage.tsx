@@ -10,10 +10,14 @@ import type { JointSpec } from '@/lib/three/urdf/types';
 
 export function CADDetailPage({ recordId }: { recordId: string }) {
   const [summary, setSummary] = useState<RecordSummary | null>(null);
+  const [summaryErr, setSummaryErr] = useState<string | null>(null);
   const [joints, setJoints] = useState<JointSpec[]>([]);
 
   useEffect(() => {
-    getSummary(recordId).then(setSummary).catch(() => {});
+    setSummaryErr(null);
+    getSummary(recordId)
+      .then(setSummary)
+      .catch((e) => setSummaryErr(e?.message ?? String(e)));
   }, [recordId]);
 
   // Materialization cache is flat per record; the URDF is always 'model.urdf'.
@@ -27,6 +31,9 @@ export function CADDetailPage({ recordId }: { recordId: string }) {
             <ArrowLeft size={16} />
           </Link>
           <span className="text-sm text-white">{summary?.title ?? recordId}</span>
+          {summaryErr && (
+            <span className="ml-auto text-xs text-red-400">Summary unavailable: {summaryErr}</span>
+          )}
         </header>
         <CADViewer recordId={recordId} urdfPath={urdfPath} pose={{}} onJointsReady={setJoints} />
       </div>

@@ -52,14 +52,19 @@ describe('UrdfLoader', () => {
     expect(robot.root.name).toBe('robot:test');
   });
 
-  it('setJointAngle rotates the child link', async () => {
+  it('setJointAngle mutates the motion node\'s quaternion', async () => {
     const loader = new UrdfLoader({ baseUrl: '/api/library/records/rec_x' });
     const robot = await loader.load('model.urdf');
+    const motionNode = robot.root.getObjectByName('joint-motion:hinge');
+    expect(motionNode).toBeTruthy();
+    const before = motionNode!.quaternion.clone();
     robot.setJointAngle('hinge', Math.PI / 4);
-    // The joint object should no longer be at identity rotation
-    // (We don't have a stable name on the inner object, so just check the spec is reachable)
-    expect(robot.joints[0].lower).toBeCloseTo(-1.57, 2);
-    expect(robot.joints[0].upper).toBeCloseTo(1.57, 2);
+    const after = motionNode!.quaternion;
+    // Rotation must actually have happened — the quaternion is no longer the pre-call value.
+    expect(after.equals(before)).toBe(false);
+    // And rotating by 0 must return the node to its origin pose (within float epsilon).
+    robot.setJointAngle('hinge', 0);
+    expect(motionNode!.quaternion.angleTo(before)).toBeLessThan(1e-6);
   });
 
   it('throws when URDF fetch fails', async () => {

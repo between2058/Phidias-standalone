@@ -151,9 +151,18 @@ export class UrdfLoader {
 
     const spec = parseUrdf(xmlText);
 
-    const { root, linkNodes, jointMotionNodes } = buildSceneGraph(spec);
+    const { root: linkRoot, linkNodes, jointMotionNodes } = buildSceneGraph(spec);
 
     await attachVisuals(spec, linkNodes, this.resolver, urdfPath);
+
+    // URDF is Z-up by robotics convention; THREE is Y-up. Wrap the link tree
+    // in a rotated group and ground-normalize so models land upright on
+    // OrbitControls' default ground plane (matches Articraft's viewer).
+    const root = new THREE.Group();
+    root.name = `robot:${spec.name}`;
+    root.rotation.x = -Math.PI / 2;
+    root.add(linkRoot);
+    normalizeToGroundOrigin(root);
 
     // Build RobotSpec (framework-agnostic)
     const robotSpec: RobotSpec = {
@@ -164,4 +173,15 @@ export class UrdfLoader {
 
     return new UrdfRobot(robotSpec, root, jointMotionNodes);
   }
+}
+
+function normalizeToGroundOrigin(group: THREE.Group): void {
+  group.updateMatrixWorld(true);
+  const box = new THREE.Box3().setFromObject(group);
+  if (!isFinite(box.min.x)) return;
+  const center = box.getCenter(new THREE.Vector3());
+  group.position.x -= center.x;
+  group.position.y -= box.min.y;
+  group.position.z -= center.z;
+  group.updateMatrixWorld(true);
 }
