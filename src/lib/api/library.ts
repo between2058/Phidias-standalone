@@ -144,7 +144,8 @@ export async function getHistory(recordId: string): Promise<unknown> {
 export async function fetchText(recordId: string, path: string): Promise<string> {
   const res = await fetch(`${BASE}/records/${recordId}/text/${path}`);
   if (!res.ok) throw new LibraryApiError(res.status, await res.text());
-  return res.text();
+  const data = (await res.json()) as { content: string };
+  return data.content;
 }
 
 export function fileUrl(recordId: string, path: string): string {

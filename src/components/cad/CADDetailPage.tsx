@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { ArrowLeft } from 'lucide-react';
 import { getSummary, type RecordSummary } from '@/lib/api/library';
+import { CADInspector } from './CADInspector';
 
 export function CADDetailPage({ recordId }: { recordId: string }) {
   const [summary, setSummary] = useState<RecordSummary | null>(null);
@@ -26,6 +27,11 @@ export function CADDetailPage({ recordId }: { recordId: string }) {
           {err ?? '3D viewer mounts here (Phase 5)'}
         </div>
       </div>
+      <CADInspector
+        recordId={recordId}
+        summary={summary}
+        jointsSlot={<div className="text-slate-500">Joints arrive in Phase 6.</div>}
+      />
     </div>
   );
 }
