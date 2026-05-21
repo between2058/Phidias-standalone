@@ -20,17 +20,20 @@ export function CADRecordGrid({ filters, onFacetsUpdate, onSelect, selectedId }:
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const sentinelRef = useRef<HTMLDivElement | null>(null);
+  const hasStarted = useRef(false);
   const requestKey = JSON.stringify(filters);
 
   useEffect(() => {
     setRecords([]);
     setOffset(0);
     setTotal(0);
+    hasStarted.current = false;
   }, [requestKey]);
 
   const loadMore = useCallback(async () => {
     if (loading) return;
     if (records.length > 0 && records.length >= total) return;
+    hasStarted.current = true;
     setLoading(true);
     setErr(null);
     try {
@@ -50,28 +53,45 @@ export function CADRecordGrid({ filters, onFacetsUpdate, onSelect, selectedId }:
     if (records.length === 0 && !loading) loadMore();
   }, [requestKey, records.length, loading, loadMore]);
 
+  // Hold the latest loadMore in a ref so the IntersectionObserver doesn't
+  // need to disconnect/reconnect after every successful fetch.
+  const loadMoreRef = useRef(loadMore);
+  useEffect(() => {
+    loadMoreRef.current = loadMore;
+  }, [loadMore]);
+
   useEffect(() => {
     const el = sentinelRef.current;
     if (!el) return;
     const obs = new IntersectionObserver((entries) => {
-      if (entries[0].isIntersecting) loadMore();
+      if (entries[0].isIntersecting) loadMoreRef.current();
     });
     obs.observe(el);
     return () => obs.disconnect();
-  }, [loadMore]);
+  }, []);
 
   if (err) {
     return (
       <div className="flex h-full items-center justify-center text-red-400">
         <div>
           <p>{err}</p>
-          <button className="mt-2 underline" onClick={() => { setOffset(0); setRecords([]); }}>Retry</button>
+          <button
+            type="button"
+            className="mt-2 underline"
+            onClick={() => {
+              setOffset(0);
+              setRecords([]);
+              hasStarted.current = false;
+            }}
+          >
+            Retry
+          </button>
         </div>
       </div>
     );
   }
 
-  if (!loading && records.length === 0) {
+  if (!loading && records.length === 0 && hasStarted.current) {
     return <div className="flex h-full items-center justify-center text-slate-500">No records match</div>;
   }
 

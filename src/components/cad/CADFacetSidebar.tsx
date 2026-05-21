@@ -20,7 +20,12 @@ function Section({ title, defaultOpen = true, children }: { title: string; defau
   const [open, setOpen] = useState(defaultOpen);
   return (
     <div className="border-b border-white/5 py-2">
-      <button onClick={() => setOpen(!open)} className="flex w-full items-center justify-between px-3 py-1 text-xs uppercase tracking-wide text-slate-400">
+      <button
+        type="button"
+        aria-expanded={open}
+        onClick={() => setOpen(!open)}
+        className="flex w-full items-center justify-between px-3 py-1 text-xs uppercase tracking-wide text-slate-400"
+      >
         <span>{title}</span>
         {open ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
       </button>

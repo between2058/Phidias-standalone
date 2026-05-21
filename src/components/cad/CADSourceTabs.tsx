@@ -15,6 +15,8 @@ export function CADSourceTabs({ value, onChange }: { value: SourceTab; onChange:
       {TABS.map((t) => (
         <button
           key={t.value}
+          type="button"
+          aria-pressed={value === t.value}
           onClick={() => onChange(t.value)}
           className={clsx(
             'rounded-md px-3 py-1.5 text-sm transition',
