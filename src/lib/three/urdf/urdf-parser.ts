@@ -307,12 +307,12 @@ function parseLink(linkEl: Element, materialLibrary: Map<string, UrdfMaterial>):
   const name = linkEl.getAttribute('name') || '';
 
   const visuals: UrdfVisual[] = [];
-  for (const visualEl of linkEl.querySelectorAll(':scope > visual')) {
+  for (const visualEl of Array.from(linkEl.querySelectorAll(':scope > visual'))) {
     visuals.push(parseVisual(visualEl, materialLibrary));
   }
 
   const collisions: UrdfVisual[] = [];
-  for (const collisionEl of linkEl.querySelectorAll(':scope > collision')) {
+  for (const collisionEl of Array.from(linkEl.querySelectorAll(':scope > collision'))) {
     collisions.push(parseVisual(collisionEl, materialLibrary));
   }
 
@@ -400,7 +400,7 @@ export function parseUrdf(urdfXml: string): UrdfSpec {
   const name = robotEl.getAttribute('name') || 'robot';
   const materialLibrary = new Map<string, UrdfMaterial>();
 
-  for (const materialEl of robotEl.querySelectorAll(':scope > material')) {
+  for (const materialEl of Array.from(robotEl.querySelectorAll(':scope > material'))) {
     const material = parseMaterial(materialEl);
     if (!material?.name) {
       continue;
@@ -409,12 +409,12 @@ export function parseUrdf(urdfXml: string): UrdfSpec {
   }
 
   const links: UrdfLink[] = [];
-  for (const linkEl of robotEl.querySelectorAll(':scope > link')) {
+  for (const linkEl of Array.from(robotEl.querySelectorAll(':scope > link'))) {
     links.push(parseLink(linkEl, materialLibrary));
   }
 
   const joints: UrdfJoint[] = [];
-  for (const jointEl of robotEl.querySelectorAll(':scope > joint')) {
+  for (const jointEl of Array.from(robotEl.querySelectorAll(':scope > joint'))) {
     joints.push(parseJoint(jointEl));
   }
 

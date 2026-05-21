@@ -5,14 +5,19 @@ import { useEffect, useState } from 'react';
 import { ArrowLeft } from 'lucide-react';
 import { getSummary, type RecordSummary } from '@/lib/api/library';
 import { CADInspector } from './CADInspector';
+import { CADViewer } from './CADViewer';
+import type { JointSpec } from '@/lib/three/urdf/types';
 
 export function CADDetailPage({ recordId }: { recordId: string }) {
   const [summary, setSummary] = useState<RecordSummary | null>(null);
-  const [err, setErr] = useState<string | null>(null);
+  const [joints, setJoints] = useState<JointSpec[]>([]);
 
   useEffect(() => {
-    getSummary(recordId).then(setSummary).catch((e) => setErr(e.message));
+    getSummary(recordId).then(setSummary).catch(() => {});
   }, [recordId]);
+
+  // Materialization cache is flat per record; the URDF is always 'model.urdf'.
+  const urdfPath = 'model.urdf';
 
   return (
     <div className="flex h-full w-full bg-[var(--bg-primary)]">
@@ -23,14 +28,12 @@ export function CADDetailPage({ recordId }: { recordId: string }) {
           </Link>
           <span className="text-sm text-white">{summary?.title ?? recordId}</span>
         </header>
-        <div className="flex flex-1 items-center justify-center text-slate-500">
-          {err ?? '3D viewer mounts here (Phase 5)'}
-        </div>
+        <CADViewer recordId={recordId} urdfPath={urdfPath} pose={{}} onJointsReady={setJoints} />
       </div>
       <CADInspector
         recordId={recordId}
         summary={summary}
-        jointsSlot={<div className="text-slate-500">Joints arrive in Phase 6.</div>}
+        jointsSlot={<div className="text-slate-500">Joints arrive in Phase 6 ({joints.length} found).</div>}
       />
     </div>
   );
