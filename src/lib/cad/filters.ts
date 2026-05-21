@@ -34,11 +34,13 @@ export function searchParamsToFilters(usp: URLSearchParams): BrowseFilters {
   const sdk = usp.get('sdk'); if (sdk) f.sdk = sdk;
   for (const key of ARRAY_KEYS) {
     const arr = usp.getAll(key);
-    if (arr.length) (f as any)[key] = arr;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    if (arr.length) (f as Record<string, any>)[key] = arr;
   }
   for (const key of NUMBER_KEYS) {
     const v = usp.get(key);
-    if (v !== null) (f as any)[key] = Number(v);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    if (v !== null) (f as Record<string, any>)[key] = Number(v);
   }
   return f;
 }

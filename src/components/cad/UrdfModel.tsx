@@ -33,6 +33,7 @@ export function UrdfModel({ recordId, urdfPath, pose, onJointsReady, onError }: 
       robotRef.current?.dispose();
       robotRef.current = null;
     };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [recordId, urdfPath]);
 
   useEffect(() => {

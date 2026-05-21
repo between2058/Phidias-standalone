@@ -42,8 +42,8 @@ export function CADRecordGrid({ filters, onFacetsUpdate, onSelect, selectedId }:
       setTotal(res.total);
       setOffset(offset + res.records.length);
       onFacetsUpdate(res.facets, res.total);
-    } catch (e: any) {
-      setErr(e.message ?? 'failed');
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : 'failed');
     } finally {
       setLoading(false);
     }

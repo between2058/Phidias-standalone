@@ -1,7 +1,9 @@
-import { describe, expect, it, beforeEach, vi, afterEach } from 'vitest';
+import { describe, expect, it, beforeEach, vi, afterEach, type MockedFunction } from 'vitest';
 import { browseRecords, getSummary, getStatus, fileUrl, type BrowseResponse, type RecordSummary } from './library';
 import sampleBrowse from '../../components/cad/__fixtures__/sample-browse-response.json';
 import sampleSummary from '../../components/cad/__fixtures__/sample-record-summary.json';
+
+type FetchMock = MockedFunction<typeof fetch>;
 
 describe('browseRecords', () => {
   beforeEach(() => {
@@ -12,7 +14,7 @@ describe('browseRecords', () => {
   });
 
   it('serializes filters and parses the response', async () => {
-    (global.fetch as any).mockResolvedValue({
+    (global.fetch as FetchMock).mockResolvedValue({
       ok: true,
       json: async () => ({
         source: 'dataset',
@@ -20,9 +22,9 @@ describe('browseRecords', () => {
         record_ids: ['rec_x'], records: [],
         facets: { models: [], sdk_packages: [], agent_harnesses: [], authors: [], categories: [], cost_min: null, cost_max: null },
       } satisfies BrowseResponse),
-    });
+    } as Response);
     const res = await browseRecords({ source: 'dataset', q: 'hinge', limit: 60 });
-    const calledUrl = (global.fetch as any).mock.calls[0][0] as string;
+    const calledUrl = (global.fetch as FetchMock).mock.calls[0][0] as string;
     expect(calledUrl).toContain('/api/library/records/browse?');
     expect(calledUrl).toContain('source=dataset');
     expect(calledUrl).toContain('q=hinge');
@@ -31,17 +33,17 @@ describe('browseRecords', () => {
   });
 
   it('throws LibraryApiError on non-ok responses', async () => {
-    (global.fetch as any).mockResolvedValue({ ok: false, status: 500, text: async () => 'boom' });
+    (global.fetch as FetchMock).mockResolvedValue({ ok: false, status: 500, text: async () => 'boom' } as Response);
     await expect(browseRecords({ source: 'dataset' })).rejects.toThrow(/boom/);
   });
 
   it('passes "all" through (sidecar treats unknown source as no filter)', async () => {
-    (global.fetch as any).mockResolvedValue({
+    (global.fetch as FetchMock).mockResolvedValue({
       ok: true,
       json: async () => ({ source: 'all', total: 0, source_total: 0, offset: 0, limit: 60, record_ids: [], records: [], facets: { models: [], sdk_packages: [], agent_harnesses: [], authors: [], categories: [], cost_min: null, cost_max: null } }),
-    });
+    } as Response);
     await browseRecords({ source: 'all' });
-    expect((global.fetch as any).mock.calls[0][0]).toContain('source=all');
+    expect((global.fetch as FetchMock).mock.calls[0][0]).toContain('source=all');
   });
 });
 
@@ -50,9 +52,9 @@ describe('getSummary', () => {
     global.fetch = vi.fn().mockResolvedValue({
       ok: true,
       json: async () => ({ record_id: 'rec_x' }),
-    });
+    } as Response);
     const s = await getSummary('rec_x');
-    expect((global.fetch as any).mock.calls[0][0]).toBe('/api/library/records/rec_x/summary');
+    expect((global.fetch as FetchMock).mock.calls[0][0]).toBe('/api/library/records/rec_x/summary');
     expect(s.record_id).toBe('rec_x');
   });
 });
@@ -66,9 +68,9 @@ describe('fileUrl', () => {
 
 describe('getStatus', () => {
   it('GETs the /bootstrap endpoint', async () => {
-    global.fetch = vi.fn().mockResolvedValue({ ok: true, json: async () => ({}) });
+    global.fetch = vi.fn().mockResolvedValue({ ok: true, json: async () => ({}) } as Response);
     await getStatus();
-    expect((global.fetch as any).mock.calls[0][0]).toBe('/api/library/bootstrap');
+    expect((global.fetch as FetchMock).mock.calls[0][0]).toBe('/api/library/bootstrap');
   });
 });
 
