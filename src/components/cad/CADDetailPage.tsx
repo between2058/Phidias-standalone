@@ -2,13 +2,19 @@
 
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { ArrowLeft } from 'lucide-react';
 import { getSummary, type RecordSummary } from '@/lib/api/library';
 import { CADInspector } from './CADInspector';
 import { CADViewer } from './CADViewer';
+import { CADJointControls } from './CADJointControls';
+import { decodePose, encodePose } from '@/lib/cad/pose';
 import type { JointSpec } from '@/lib/three/urdf/types';
 
 export function CADDetailPage({ recordId }: { recordId: string }) {
+  const router = useRouter();
+  const usp = useSearchParams();
+  const pose = decodePose(usp.get('pose'));
   const [summary, setSummary] = useState<RecordSummary | null>(null);
   const [summaryErr, setSummaryErr] = useState<string | null>(null);
   const [joints, setJoints] = useState<JointSpec[]>([]);
@@ -20,7 +26,14 @@ export function CADDetailPage({ recordId }: { recordId: string }) {
       .catch((e) => setSummaryErr(e?.message ?? String(e)));
   }, [recordId]);
 
-  // Materialization cache is flat per record; the URDF is always 'model.urdf'.
+  const setPose = (next: Record<string, number>) => {
+    const encoded = encodePose(next);
+    const params = new URLSearchParams(usp.toString());
+    if (encoded) params.set('pose', encoded);
+    else params.delete('pose');
+    router.replace(`/workspace/cad/${recordId}?${params.toString()}`);
+  };
+
   const urdfPath = 'model.urdf';
 
   return (
@@ -35,12 +48,12 @@ export function CADDetailPage({ recordId }: { recordId: string }) {
             <span className="ml-auto text-xs text-red-400">Summary unavailable: {summaryErr}</span>
           )}
         </header>
-        <CADViewer recordId={recordId} urdfPath={urdfPath} pose={{}} onJointsReady={setJoints} />
+        <CADViewer recordId={recordId} urdfPath={urdfPath} pose={pose} onJointsReady={setJoints} />
       </div>
       <CADInspector
         recordId={recordId}
         summary={summary}
-        jointsSlot={<div className="text-slate-500">Joints arrive in Phase 6 ({joints.length} found).</div>}
+        jointsSlot={<CADJointControls joints={joints} pose={pose} onChange={setPose} />}
       />
     </div>
   );
