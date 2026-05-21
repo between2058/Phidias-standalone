@@ -120,3 +120,34 @@ export async function browseRecords(filters: BrowseFilters): Promise<BrowseRespo
   }
   return (await res.json()) as BrowseResponse;
 }
+
+export async function getSummary(recordId: string): Promise<RecordSummary> {
+  const res = await fetch(`${BASE}/records/${recordId}/summary`);
+  if (!res.ok) throw new LibraryApiError(res.status, await res.text());
+  return res.json();
+}
+
+export async function getHistory(recordId: string): Promise<unknown> {
+  const res = await fetch(`${BASE}/records/${recordId}/history`);
+  if (!res.ok) throw new LibraryApiError(res.status, await res.text());
+  return res.json();
+}
+
+export async function fetchText(recordId: string, path: string): Promise<string> {
+  const res = await fetch(`${BASE}/records/${recordId}/text/${path}`);
+  if (!res.ok) throw new LibraryApiError(res.status, await res.text());
+  return res.text();
+}
+
+export function fileUrl(recordId: string, path: string): string {
+  return `${BASE}/records/${recordId}/files/${path}`;
+}
+
+// Sidecar liveness — uses /api/bootstrap which returns the viewer bootstrap blob.
+// (The sidecar does not expose /api/status; /health exists but lives outside the
+// /api/* prefix and therefore is not reachable through our /api/library/* rewrite.)
+export async function getStatus(): Promise<unknown> {
+  const res = await fetch(`${BASE}/bootstrap`);
+  if (!res.ok) throw new LibraryApiError(res.status, await res.text());
+  return res.json();
+}

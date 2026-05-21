@@ -1,5 +1,5 @@
 import { describe, expect, it, beforeEach, vi, afterEach } from 'vitest';
-import { browseRecords, type BrowseResponse } from './library';
+import { browseRecords, getSummary, getStatus, fileUrl, type BrowseResponse } from './library';
 
 describe('browseRecords', () => {
   beforeEach(() => {
@@ -40,5 +40,32 @@ describe('browseRecords', () => {
     });
     await browseRecords({ source: 'all' });
     expect((global.fetch as any).mock.calls[0][0]).toContain('source=all');
+  });
+});
+
+describe('getSummary', () => {
+  it('GETs the summary endpoint', async () => {
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ record_id: 'rec_x' }),
+    });
+    const s = await getSummary('rec_x');
+    expect((global.fetch as any).mock.calls[0][0]).toBe('/api/library/records/rec_x/summary');
+    expect(s.record_id).toBe('rec_x');
+  });
+});
+
+describe('fileUrl', () => {
+  it('returns the proxied file URL for the URDF', () => {
+    expect(fileUrl('rec_x', 'model.urdf'))
+      .toBe('/api/library/records/rec_x/files/model.urdf');
+  });
+});
+
+describe('getStatus', () => {
+  it('GETs the /bootstrap endpoint', async () => {
+    global.fetch = vi.fn().mockResolvedValue({ ok: true, json: async () => ({}) });
+    await getStatus();
+    expect((global.fetch as any).mock.calls[0][0]).toBe('/api/library/bootstrap');
   });
 });
