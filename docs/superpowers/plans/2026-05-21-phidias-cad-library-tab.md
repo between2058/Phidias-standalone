@@ -4,7 +4,9 @@
 
 **Goal:** Add a new top-level **CAD** tab in Phidias that browses the Articraft asset dataset via a sidecar FastAPI, with a faceted grid and a URDF detail viewer with joint controls.
 
-**Architecture:** Sidecar topology — Articraft's FastAPI runs locally on `:8765`; Phidias proxies `/api/library/*` to `/api/*` via a single `next.config.mjs` rewrite. The Articraft URDF parser + kinematics modules are ported into Phidias and mounted inside React Three Fiber with `<primitive>`. Read-only MVP. Sub-route `/workspace/cad/[recordId]` for detail.
+**Architecture:** Sidecar topology — Articraft's FastAPI runs locally on `:8765`; Phidias proxies `/api/library/*` to `/api/*` via a single `next.config.mjs` rewrite. The Articraft URDF parser (`urdf-parser.ts`, fully framework-agnostic) is ported into Phidias verbatim; its R3F-incompatible companion `useUrdfLoader.ts` is replaced by a small R3F-idiomatic wrapper. The compiled URDF mounts inside React Three Fiber via `<primitive>`. Read-only MVP. Sub-route `/workspace/cad/[recordId]` for detail.
+
+**Materialization cache layout (confirmed by Phase-0 spike):** `data/cache/record_materialization/<record_id>/model.urdf` — flat per record (NOT revision-scoped) and NOT split into visual/collision variants. The `/api/records/<id>/files/<path>` endpoint resolves `model.urdf` against this cache.
 
 **Tech Stack:** Next.js 14, React 18, React Three Fiber `^8.18`, `@react-three/drei` `^9.122`, three `^0.183`, TypeScript, Tailwind v4, vitest, Playwright. **No shadcn.** Reuse Phidias CSS variables (`--bg-primary`, `--bg-card`, `--accent-purple`, etc.) and glassmorphism patterns from `AssetsPanel`.
 
@@ -89,7 +91,9 @@ Most unknowns were resolved during planning. This phase only validates the URDF 
 
 - [ ] **Step 1: Pick one record and `cat` its `record.json`.** Confirm `schema_version`, `active_revision_id`, and that `artifacts.model_py` points into `revisions/<rev_id>/`.
 
-- [ ] **Step 2: Confirm the materialization cache has `model_visual.urdf`** at `/home/pegaai/code/articraft/data/cache/record_materialization/<record_id>/<rev_id>/model_visual.urdf`. If it does not exist for that record, pick a different record (one that has been compiled) for E2E testing later. Note the picked record id for Task 8.
+- [ ] **Step 2: Confirm the materialization cache has `model.urdf`** at `/home/pegaai/code/articraft/data/cache/record_materialization/<record_id>/model.urdf` (NOTE: NOT revision-scoped; the cache is flat per record). If it does not exist for that record, pick a different record (one that has been compiled) for E2E testing later. Note the picked record id for Task 8.
+
+**Findings already captured by spike:** Test record id = `rec_an-nvidia-gb300-nvl72-server-rack-a-tall-enclose_20260518_055942_556781_2acac014`. Only ~15 records are compiled, so most grid items will surface the "not compiled" empty state — that is acceptable for MVP.
 
 - [ ] **Step 3: No commit.**
 
@@ -528,8 +532,8 @@ describe('getSummary', () => {
 
 describe('fileUrl', () => {
   it('returns the proxied file URL', () => {
-    expect(fileUrl('rec_x', 'revisions/rev_000001/model_visual.urdf'))
-      .toBe('/api/library/records/rec_x/files/revisions/rev_000001/model_visual.urdf');
+    expect(fileUrl('rec_x', 'model.urdf'))
+      .toBe('/api/library/records/rec_x/files/model.urdf');
   });
 });
 ```
@@ -561,13 +565,11 @@ export function fileUrl(recordId: string, path: string): string {
   return `${BASE}/records/${recordId}/files/${path}`;
 }
 
-export interface ServiceStatus {
-  ready: boolean;
-  schema_version?: number;
-}
-
-export async function getStatus(): Promise<ServiceStatus> {
-  const res = await fetch(`${BASE}/status`);
+// Sidecar liveness — uses /api/bootstrap which returns the viewer bootstrap blob.
+// (The sidecar does not expose /api/status; /health exists but lives outside the
+// /api/* prefix and therefore is not reachable through our /api/library/* rewrite.)
+export async function getStatus(): Promise<unknown> {
+  const res = await fetch(`${BASE}/bootstrap`);
   if (!res.ok) throw new LibraryApiError(res.status, await res.text());
   return res.json();
 }
@@ -1529,8 +1531,8 @@ describe('MeshResolver', () => {
   });
 
   it('resolves relative paths against the URDF directory', () => {
-    expect(r.resolve('meshes/foo.stl', 'revisions/rev_000001/model_visual.urdf'))
-      .toBe('/api/library/records/rec_x/files/revisions/rev_000001/meshes/foo.stl');
+    expect(r.resolve('assets/foo.glb', 'model.urdf'))
+      .toBe('/api/library/records/rec_x/files/assets/foo.glb');
   });
 });
 ```
@@ -1642,7 +1644,7 @@ describe('UrdfLoader', () => {
 
   it('parses a minimal URDF into a robot with one joint', async () => {
     const loader = new UrdfLoader({ baseUrl: '/api/library/records/rec_x' });
-    const robot = await loader.load('revisions/rev_000001/model_visual.urdf');
+    const robot = await loader.load('model.urdf');
     expect(robot.joints).toHaveLength(1);
     expect(robot.joints[0].name).toBe('hinge');
     expect(robot.joints[0].type).toBe('revolute');
@@ -1879,7 +1881,8 @@ export function CADDetailPage({ recordId }: { recordId: string }) {
     getSummary(recordId).then(setSummary).catch(() => {});
   }, [recordId]);
 
-  const urdfPath = `revisions/${summary?.active_revision_id ?? 'rev_000001'}/model_visual.urdf`;
+  // Materialization cache is flat per record; the URDF is always 'model.urdf'.
+  const urdfPath = 'model.urdf';
 
   return (
     <div className="flex h-full w-full bg-[var(--bg-primary)]">
@@ -2100,7 +2103,7 @@ export function CADDetailPage({ recordId }: { recordId: string }) {
     router.replace(`/workspace/cad/${recordId}?${params.toString()}`);
   };
 
-  const urdfPath = `revisions/${summary?.active_revision_id ?? 'rev_000001'}/model_visual.urdf`;
+  const urdfPath = 'model.urdf';
 
   return (
     <div className="flex h-full w-full bg-[var(--bg-primary)]">
@@ -2218,7 +2221,7 @@ Expected: all green. Fix anything red.
 
 **Files:** Create `e2e/cad-library.spec.ts`.
 
-- [ ] **Step 1: Pick the test record id** from Task 0.2 (one that has `model_visual.urdf` compiled).
+- [ ] **Step 1: Use the test record id** captured by Task 0.2: `rec_an-nvidia-gb300-nvl72-server-rack-a-tall-enclose_20260518_055942_556781_2acac014`.
 
 - [ ] **Step 2: Write the spec.**
 
@@ -2226,7 +2229,7 @@ Expected: all green. Fix anything red.
 // e2e/cad-library.spec.ts
 import { test, expect } from '@playwright/test';
 
-const TEST_RECORD_ID = '<<paste the record id from Task 0.2>>';
+const TEST_RECORD_ID = 'rec_an-nvidia-gb300-nvl72-server-rack-a-tall-enclose_20260518_055942_556781_2acac014';
 
 test.describe('CAD library', () => {
   test('grid loads, detail opens, joint slider moves model', async ({ page }) => {
@@ -2336,9 +2339,99 @@ git commit -m "test(cad): auto-start sidecar in Playwright"
 ## Spike Findings
 
 <!--
-Filled in during Task 0.1. Document:
-- Verdict: port-as-is / refactor-mesh-resolver-only / fallback-to-urdf-loader-npm
-- Public API recreated in src/lib/three/urdf/UrdfLoader.ts
-- Mesh URL pattern observed in Articraft
-- Any util that was inlined rather than imported
+Task 0.1 findings (read-only spike, 2026-05-21)
+
+VERDICT: refactor-mesh-resolver-only
+
+The urdf-parser.ts is entirely standalone — no imports outside `three` itself. It
+can be copied into Phidias with zero changes except stripping the
+`rewriteAbsoluteMeshFilenames` helper (Phidias assets will never use package://
+paths). useUrdfLoader.ts has five local sibling dependencies that ARE
+Articraft-specific and must be replaced or re-implemented:
+
+  import { buildRobotSceneGraph, collisionColorForIndex }   from './scene-graph-builder';
+  import { computeFit, preserveViewAcrossModelSwitch, updateCameraClipping } from './camera-utils';
+  import { positionGroundHelpers }                          from './lighting';
+  import { loadGeometryObject }                             from './geometry-loader';
+  import { depthBiasForOrdinal, resolveVisualMaterialSpec } from './materials';
+
+geometry-loader.ts (which owns actual mesh fetching) is also self-contained —
+its only external deps are `three/addons/loaders/GLTFLoader.js` and
+`three/addons/loaders/OBJLoader.js` (both already in Phidias via drei/three).
+It can be ported as-is. The other siblings (scene-graph-builder, camera-utils,
+lighting, materials) encapsulate Articraft-specific scene management and will
+need re-implementation or a simplified Phidias-flavoured substitute.
+
+MESH URL PATTERN (exact):
+The URDF is fetched from:
+  `${baseFileUrl}/model.urdf`        -- via new URL(..., window.location.origin)
+
+where baseFileUrl is constructed in ViewerShell.tsx as:
+  `/api/records/${selection.recordId}/files`
+
+Individual mesh files are resolved in geometry-loader.ts as:
+  url = baseUrl.endsWith('/') ? `${baseUrl}${filename}` : `${baseUrl}/${filename}`
+
+So a complete mesh URL looks like:
+  /api/records/<recordId>/files/<mesh-filename-from-urdf>   (e.g. .glb or .obj)
+
+An optional cache-buster `?rev=<assetRevisionKey>` is appended when a revision
+key is present; `no-store` cache policy is used when one is supplied.
+
+In Phidias the `baseFileUrl` equivalent will need to point at whatever URL
+prefix serves the URDF bundle (e.g. a Phidias asset CDN path or local API
+route). The downstream resolution logic in geometry-loader is fully reusable
+without changes once the base URL is supplied.
+
+PUBLIC API TO RECREATE IN Phidias (src/lib/three/urdf/):
+
+From urdf-parser.ts — all exports are portable:
+  parseUrdf(urdfXml: string): UrdfSpec
+  rewriteAbsoluteMeshFilenames(spec: UrdfSpec): UrdfSpec   -- optional; skip if no package:// paths
+  findRootLink(spec: UrdfSpec): string | null
+  rpyToMatrix4(rpy: [number,number,number]): THREE.Matrix4
+  originToMatrix4(origin?): THREE.Matrix4
+  parseVec3(str): [number,number,number]
+  parseVec4(str): [number,number,number,number]
+  buildUrdfVisualKey(linkName, visualIndex): string
+  describeLinkVisuals(link: UrdfLink): UrdfVisualDescriptor[]
+
+Key types: UrdfSpec, UrdfLink, UrdfJoint, UrdfVisual, UrdfVisualGeometry,
+  UrdfVisualDescriptor, CollisionGeometryState, UrdfLoaderState
+
+From geometry-loader.ts — portable, just swap the base URL:
+  loadGeometryObject(geometry, baseUrl, options): Promise<THREE.Group>
+  buildPrimitiveMesh(geometry, materialSpec, options): THREE.Mesh | null
+  addEdgeLines(mesh: THREE.Object3D): void
+
+From useUrdfLoader.ts — the hook itself is too Articraft-coupled to port as-is
+(uses OrbitControls directly, manages scene.add/remove, drives camera fitting,
+grid/axis helpers). Recommend writing a leaner Phidias version that:
+  1. Takes a baseFileUrl (or assetId) and returns { urdfSpec, loading, error }.
+  2. Uses R3F's useThree() rather than raw THREE.Scene + OrbitControls refs.
+  3. Delegates mesh loading to the ported loadGeometryObject.
+  4. Leaves camera/controls management to Phidias's existing CameraControls setup.
+
+DEPENDENCIES OUTSIDE viewer3d/ (would NOT be carried into Phidias):
+  - None from urdf-parser.ts (pure three + DOM).
+  - geometry-loader.ts depends only on three/addons GLTFLoader + OBJLoader.
+  - useUrdfLoader.ts depends on OrbitControls from three/addons (Phidias uses
+    @react-three/drei CameraControls, so this wiring must change).
+
+THREE.JS VERSION NOTE:
+Both repos pin `three ^0.183.0`. No version-lock concern for the port.
+
+MODULE INIT SIDE EFFECTS:
+geometry-loader.ts initialises a module-level Map cache:
+  const geometryTemplateCache = new Map<string, Promise<THREE.Object3D>>();
+This is benign but means the cache lives for the lifetime of the module. In
+Next.js (HMR in dev) this will reset on hot reload, which is fine.
+
+SUMMARY ACTION FOR PHASE 5:
+- Copy urdf-parser.ts wholesale (optionally drop rewriteAbsoluteMeshFilenames).
+- Copy geometry-loader.ts wholesale; supply Phidias base URL instead of /api/records/.
+- Write a new useUrdfLoader hook (or RSC data-fetcher) for Phidias that calls
+  parseUrdf + loadGeometryObject with R3F-idiomatic patterns.
+- Do NOT attempt to port scene-graph-builder, camera-utils, lighting, or
+  materials verbatim — reimplement lightweight Phidias-specific versions.
 -->

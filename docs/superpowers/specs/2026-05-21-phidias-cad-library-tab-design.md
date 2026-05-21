@@ -201,7 +201,7 @@ export function UrdfModel({ recordId, pose }: Props) {
   useEffect(() => {
     let cancelled = false;
     new UrdfLoader({ baseUrl: `/api/library/records/${recordId}` })
-      .load('files/revisions/rev_000001/model_visual.urdf')
+      .load('model.urdf')   // resolved by the loader to /api/library/records/<id>/files/model.urdf
       .then((r) => { if (!cancelled) setRobot(r); });
     return () => { cancelled = true; robot?.dispose(); };
   }, [recordId]);
@@ -221,14 +221,9 @@ This is the standard "raw three.js object mounted into R3F via `<primitive/>`" p
 
 ### Which URDF to load
 
-Each record exposes two URDFs via the Articraft cache:
+**Spike correction (2026-05-21):** Articraft's materialization cache is flat per record — `data/cache/record_materialization/<record_id>/model.urdf` — and is NOT revision-scoped, NOT split into visual/collision variants. There is exactly one URDF per compiled record.
 
-- `revisions/rev_000001/model_visual.urdf` — visual-only, no collision, **faster**
-- `revisions/rev_000001/model.urdf` — full with collision, slower
-
-MVP defaults to `model_visual.urdf`. A collision toggle is a follow-up.
-
-Articraft's `files` endpoint already handles the "source not yet compiled → fall back to materialization cache" logic, so Phidias does not have to replicate it.
+The MVP loads `model.urdf`. Source-side artifacts (`model.py`, `prompt.txt`) remain revision-scoped at `revisions/<rev>/…` and are served by the same `files` endpoint. Articraft's `files` endpoint handles cache fallback, so Phidias does not have to replicate it.
 
 ### Joint controls
 
@@ -375,7 +370,7 @@ E2E fixture starts `uv run uvicorn viewer.api.app:app --port 8765` before the su
 | 2 | How tightly coupled is Articraft's URDF loader to its own utilities and three.js version? | Has not been read line-by-line; coupling is the porting risk | Read `viewer/web/src/lib/urdf/` and trace import graph |
 | 3 | Are Phidias's R3F / three.js versions compatible with the version Articraft's URDF code expects? | Articraft pins `three ^0.183.2`; Phidias's version unverified | Diff `package.json` in both repos |
 | 4 | How does Phidias gracefully handle a future bump in `record.json` `schema_version`? | Current is 3; future bumps will land asymmetrically | MVP only reads known fields; unknown fields are ignored, not thrown |
-| 5 | Do all records have a compiled `model_visual.urdf`? | Uncompiled workbench records may not | Viewer surfaces a "not compiled" empty state (see Data Flow → Failure handling) |
+| 5 | Do all records have a compiled `model.urdf`? | Uncompiled workbench/low-rated records do not | Confirmed: ~15 of ~10K records are compiled. Viewer surfaces a "not compiled" empty state for the rest (see Data Flow → Failure handling). |
 
 ## Risks
 
