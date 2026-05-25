@@ -20,7 +20,7 @@ export function CADViewer({ recordId, urdfPath, pose, onJointsReady }: Props) {
       <Canvas camera={{ position: [1.5, 1.2, 1.5], fov: 50 }}>
         <ambientLight intensity={0.4} />
         <directionalLight position={[5, 5, 5]} intensity={1} />
-        <Environment preset="studio" />
+        <Environment files="/hdri/qwantani_moonrise_puresky_2k.hdr" />
         <OrbitControls makeDefault />
         <UrdfModel
           recordId={recordId}
