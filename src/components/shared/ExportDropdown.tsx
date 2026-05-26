@@ -18,6 +18,9 @@ interface ExportDropdownProps {
   className?: string;
   /** When provided, export the live Three.js scene instead of the raw modelUrl. */
   sceneRef?: MutableRefObject<THREE.Group | null>;
+  /** Force-disable export (e.g. while a transient view like exploded mode is
+   *  active) so its modified geometry is not baked into the downloaded file. */
+  disabled?: boolean;
 }
 
 
@@ -108,14 +111,14 @@ async function downloadUsdzFromScene(scene: THREE.Group, baseName: string, segme
 
 // ─────────────────────────────────────────────────────────────────────────────
 
-export default function ExportDropdown({ className, sceneRef }: ExportDropdownProps) {
+export default function ExportDropdown({ className, sceneRef, disabled: disabledProp = false }: ExportDropdownProps) {
   const [open, setOpen] = useState(false);
   const [working, setWorking] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const { assets, activeAssetId } = useWorkspace();
 
   const activeAsset = assets.find(a => a.id === activeAssetId) ?? null;
-  const disabled = !activeAsset || activeAsset.status !== 'ready' || !activeAsset.modelUrl;
+  const disabled = disabledProp || !activeAsset || activeAsset.status !== 'ready' || !activeAsset.modelUrl;
 
   useEffect(() => {
     function handleOutside(e: MouseEvent) {
@@ -189,7 +192,7 @@ export default function ExportDropdown({ className, sceneRef }: ExportDropdownPr
           style={{ background: 'var(--accent-gold)', color: '#1a1a2e' }}
           disabled={disabled || working}
           onClick={() => handleExport('glb')}
-          title={disabled ? 'No active asset' : `Export "${activeAsset?.name}" as .glb`}
+          title={disabled ? 'Export unavailable' : `Export "${activeAsset?.name}" as .glb`}
         >
           <Upload size={12} />
           <span>{working ? 'Exporting…' : 'Export'}</span>

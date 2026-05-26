@@ -766,6 +766,8 @@ export default function SegmentPage() {
   // Keep the rAF loop's amount ref current. When fully exploded and the loop is
   // idle (transition already settled), re-apply once so the magnitude slider
   // updates the spread live — without spinning up a continuous animation loop.
+  // Note: the slider is only mounted while `exploded` is true, so the converging
+  // case (raf running, exploded=false) is unreachable from the UI.
   useEffect(() => {
     explodeAmountRef.current = explodeAmount;
     if (explodedRef.current && explodeRafRef.current == null) {
@@ -2088,11 +2090,11 @@ export default function SegmentPage() {
           <button
             data-testid="explode-toggle"
             onClick={() => setExploded((v) => !v)}
-            disabled={topLevelPartCount === 0}
+            disabled={topLevelPartCount < 2}
             title="Exploded view (dilate parts outward / converge back)"
             className={cn(
               'flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors',
-              topLevelPartCount === 0
+              topLevelPartCount < 2
                 ? 'bg-[#252542] text-[#64748b] cursor-not-allowed'
                 : exploded
                   ? 'bg-[#7c3aed] text-white hover:bg-[#6d28d9]'
@@ -2146,7 +2148,7 @@ export default function SegmentPage() {
             ★
           </button>
           <span className="text-xs text-[#f5a623] font-bold">⚡ 55</span> */}
-          <ExportDropdown sceneRef={sceneRef} />
+          <ExportDropdown sceneRef={sceneRef} disabled={exploded} />
         </div>
       </main>
     </div>

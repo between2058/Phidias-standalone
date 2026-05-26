@@ -60,4 +60,12 @@ describe('easeInOutCubic', () => {
     expect(easeInOutCubic(-1)).toBeCloseTo(0);
     expect(easeInOutCubic(2)).toBeCloseTo(1);
   });
+  it('is monotonically non-decreasing across [0,1]', () => {
+    let prev = -Infinity;
+    for (let i = 0; i <= 20; i++) {
+      const cur = easeInOutCubic(i / 20);
+      expect(cur).toBeGreaterThanOrEqual(prev);
+      prev = cur;
+    }
+  });
 });
