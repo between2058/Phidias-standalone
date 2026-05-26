@@ -502,7 +502,6 @@ export default function SegmentPage() {
   // imperative position mutations would not trigger a re-render and the animation
   // would freeze — an invalidate() call from inside the Canvas would be needed.
   const [exploded, setExploded] = useState(false);
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- wired by Task 3 (Toolbar UI)
   const [explodeAmount, setExplodeAmount] = useState(1); // slider gain, 0..2
 
   // Refs read inside the rAF loop (avoid stale closures / re-renders).
@@ -523,6 +522,7 @@ export default function SegmentPage() {
   const setPendingSegmentedModel = usePhidiasStore((s) => s.setPendingSegmentedModel);
 
   const selectedPartId = selectedPartIds[selectedPartIds.length - 1] ?? null;
+  const topLevelPartCount = parts.filter((p) => !p.parentId).length;
 
   const highlightedMeshIds = selectedPartIds.flatMap(pid => {
     const part = parts.find(p => p.id === pid);
@@ -2085,6 +2085,35 @@ export default function SegmentPage() {
             📁 Group{selectedPartIds.length >= 2 ? ` (${selectedPartIds.length})` : ''}
           </button>
           <div className="h-5 w-px bg-[#333355]" />
+          <button
+            data-testid="explode-toggle"
+            onClick={() => setExploded((v) => !v)}
+            disabled={topLevelPartCount === 0}
+            title="Exploded view (dilate parts outward / converge back)"
+            className={cn(
+              'flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors',
+              topLevelPartCount === 0
+                ? 'bg-[#252542] text-[#64748b] cursor-not-allowed'
+                : exploded
+                  ? 'bg-[#7c3aed] text-white hover:bg-[#6d28d9]'
+                  : 'bg-[#252542] text-[#94a3b8] hover:text-white'
+            )}
+          >
+            💥 Explode
+          </button>
+          {exploded && (
+            <input
+              data-testid="explode-amount"
+              type="range"
+              min={0}
+              max={2}
+              step={0.05}
+              value={explodeAmount}
+              onChange={(e) => setExplodeAmount(parseFloat(e.target.value))}
+              title={`Explosion amount: ${explodeAmount.toFixed(2)}`}
+              className="w-24 accent-[#7c3aed] cursor-pointer"
+            />
+          )}
           {/* Quick AI trigger shortcut */}
           {/* <button
                         onClick={() => setLeftMode(m => m === 'ai' ? 'edit' : 'ai')}
@@ -2101,10 +2130,10 @@ export default function SegmentPage() {
           <div className="h-5 w-px bg-[#333355]" />
           <button
             onClick={handleSave}
-            disabled={isSaving || !activeAssetId}
+            disabled={isSaving || !activeAssetId || exploded}
             className={cn(
               'flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-colors',
-              isSaving || !activeAssetId
+              isSaving || !activeAssetId || exploded
                 ? 'bg-[#16a34a]/50 text-[#1a1a2e]/60 cursor-not-allowed'
                 : 'bg-[#22c55e] text-[#1a1a2e] hover:bg-[#16a34a]'
             )}
