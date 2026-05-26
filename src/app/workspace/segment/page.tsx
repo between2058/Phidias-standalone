@@ -20,6 +20,7 @@ import { usePhidiasStore } from '@/store/phidias-store';
 import { useConnectionAvailability, useConnectionCount } from '@/hooks/useJobManager';
 import { segment3D, smartOrganize, JobSubmitResponse } from '@/lib/api/phidias';
 import type { SmartOrganizeResult } from '@/lib/api/phidias';
+import { computeRadialVectors, explodeOffset, easeInOutCubic } from '@/lib/segment/explode';
 
 const ThreeViewport = dynamic(() => import('@/components/shared/ThreeViewport'), {
   ssr: false,
@@ -394,6 +395,9 @@ async function splitSegmentedGlb(blob: Blob): Promise<{ blob: Blob; partCount: n
 
 // ─── Page component ──────────────────────────────────────────────────────────
 
+/** Duration of the exploded-view dilate/converge animation, in milliseconds. */
+const EXPLODE_ANIM_MS = 600;
+
 export default function SegmentPage() {
   const { setSceneGraph, setSegmentHierarchy, assets, activeAssetId, addAsset, setActiveAssetId, updateAsset, updateAssetThumbnail } = useWorkspace();
   const activeModelUrl = assets.find(a => a.id === activeAssetId)?.modelUrl ?? null;
@@ -489,6 +493,31 @@ export default function SegmentPage() {
   const [lastClickedMeshId, setLastClickedMeshId] = useState<string | null>(null);
   const [transform, setTransform] = useState<TransformValues | null>(null);
 
+  // ── Exploded view state ───────────────────────────────────────────────────
+  // UI state lives here (NOT in useSegmentStore) so it never enters Zundo undo
+  // history, which only snapshots `parts`. Animation is driven imperatively over
+  // sceneRef via requestAnimationFrame.
+  // IMPORTANT: relies on the R3F Canvas using frameloop="always" (its default in
+  // ThreeViewport). If that Canvas ever switches to frameloop="demand", these
+  // imperative position mutations would not trigger a re-render and the animation
+  // would freeze — an invalidate() call from inside the Canvas would be needed.
+  const [exploded, setExploded] = useState(false);
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- wired by Task 3 (Toolbar UI)
+  const [explodeAmount, setExplodeAmount] = useState(1); // slider gain, 0..2
+
+  // Refs read inside the rAF loop (avoid stale closures / re-renders).
+  const explodedRef = useRef(false);
+  const explodeAmountRef = useRef(1);
+  const explodeProgressRef = useRef(0); // current eased value, 0..1
+  const explodeRafRef = useRef<number | null>(null);
+  const transitionStartProgressRef = useRef(0);
+  const transitionTargetRef = useRef(0);
+  const transitionStartTimeRef = useRef(0);
+  // Per-object animation targets, resolved at explode-enable time.
+  const explodeTargetsRef = useRef<
+    { obj: THREE.Object3D; base: THREE.Vector3; worldRadialVec: THREE.Vector3 }[]
+  >([]);
+
   // ── Pending segmented model (set by useJobDownload, used as URL-match fallback) ──
   const pendingSegmentedModel = usePhidiasStore((s) => s.pendingSegmentedModel);
   const setPendingSegmentedModel = usePhidiasStore((s) => s.setPendingSegmentedModel);
@@ -579,7 +608,106 @@ export default function SegmentPage() {
     console.log(`[UNDO-DEBUG] applyTransformSnapshot applied index ${idx} to ${applyCount} objects.`);
   }, [lastClickedMeshId]);
 
+  // ── Explode helpers ───────────────────────────────────────────────────────
+
+  /** Resolve top-level parts to their scene Object3D + world centroid, then
+   *  compute radial vectors and capture baseline local positions. */
+  const buildExplodeTargets = useCallback(() => {
+    const root = sceneRef.current;
+    if (!root) {
+      explodeTargetsRef.current = [];
+      return;
+    }
+    root.updateMatrixWorld(true);
+
+    // Index every named object. Assumes scene object names are unique; on a
+    // name collision the last traversal hit wins (acceptable — segment meshIds
+    // and merged_/group_ ids are unique by construction).
+    const byName = new Map<string, THREE.Object3D>();
+    root.traverse((o) => {
+      if (o.name) byName.set(o.name, o);
+    });
+
+    const topParts = useSegmentStore.getState().parts.filter((p) => !p.parentId);
+    const resolved: { key: string; obj: THREE.Object3D; centroid: THREE.Vector3 }[] = [];
+    for (const part of topParts) {
+      // merged_/group_ parts are THREE.Groups named === part.id; single parts are meshes.
+      let obj = byName.get(part.id) ?? null;
+      if (!obj) {
+        const mid = part.meshIds[0];
+        obj = mid ? (meshRegistryRef.current.get(mid)?.obj ?? null) : null;
+      }
+      if (!obj) continue;
+      const centroid = new THREE.Box3().setFromObject(obj).getCenter(new THREE.Vector3());
+      resolved.push({ key: obj.name || obj.uuid, obj, centroid });
+    }
+
+    const radial = computeRadialVectors(resolved.map((r) => ({ key: r.key, centroid: r.centroid })));
+    explodeTargetsRef.current = resolved.map((r) => ({
+      obj: r.obj,
+      base: r.obj.position.clone(),
+      worldRadialVec: radial.get(r.key) ?? new THREE.Vector3(),
+    }));
+  }, []);
+
+  /** Apply offsets for a given eased progress + slider amount. Converts the
+   *  world-space radial offset into each object's parent-local frame. */
+  const applyExplode = useCallback((progress: number, amount: number) => {
+    for (const t of explodeTargetsRef.current) {
+      const parent = t.obj.parent;
+      if (!parent) continue;
+      const worldOffset = explodeOffset(t.worldRadialVec, amount, progress);
+      const worldBase = parent.localToWorld(t.base.clone());
+      const localTarget = parent.worldToLocal(worldBase.add(worldOffset));
+      t.obj.position.copy(localTarget);
+      t.obj.updateMatrixWorld(true);
+    }
+  }, []);
+
+  /** Snap every target back to its captured baseline (exact restore). */
+  const restoreExplode = useCallback(() => {
+    for (const t of explodeTargetsRef.current) {
+      t.obj.position.copy(t.base);
+      t.obj.updateMatrixWorld(true);
+    }
+  }, []);
+
+  /** rAF frame: ease progress toward the target, then STOP once the transition
+   *  completes (in either direction). While idle-exploded the loop does not keep
+   *  running — live slider changes are re-applied by the explodeAmount effect. */
+  const explodeTick = useCallback(() => {
+    // Nothing to animate (e.g. the model changed mid-flight) — stop cleanly.
+    if (explodeTargetsRef.current.length === 0) {
+      explodeRafRef.current = null;
+      return;
+    }
+    const now = performance.now();
+    const u = Math.min(1, (now - transitionStartTimeRef.current) / EXPLODE_ANIM_MS);
+    const eased = easeInOutCubic(u);
+    const start = transitionStartProgressRef.current;
+    const target = transitionTargetRef.current;
+    const progress = start + (target - start) * eased;
+    explodeProgressRef.current = progress;
+
+    applyExplode(progress, explodeAmountRef.current);
+
+    if (u >= 1) {
+      // Transition finished. When converged, snap to exact baselines (no float
+      // drift); when fully exploded, positions are already correct. Either way,
+      // stop the loop so we don't burn frames holding a static pose.
+      if (target === 0) {
+        restoreExplode();
+        explodeProgressRef.current = 0;
+      }
+      explodeRafRef.current = null;
+      return;
+    }
+    explodeRafRef.current = requestAnimationFrame(explodeTick);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [applyExplode, restoreExplode]);
+
   const undoTransform = useCallback(() => {
+    if (explodedRef.current) return; // don't fight the exploded-view animation
     if (historyIndexRef.current > 0) {
       historyIndexRef.current--;
       applyTransformSnapshot(historyIndexRef.current);
@@ -589,6 +717,7 @@ export default function SegmentPage() {
   }, [applyTransformSnapshot]);
 
   const redoTransform = useCallback(() => {
+    if (explodedRef.current) return; // don't fight the exploded-view animation
     if (historyIndexRef.current < transformHistoryRef.current.length - 1) {
       historyIndexRef.current++;
       applyTransformSnapshot(historyIndexRef.current);
@@ -596,6 +725,53 @@ export default function SegmentPage() {
       setCanRedoTransform(historyIndexRef.current < transformHistoryRef.current.length - 1);
     }
   }, [applyTransformSnapshot]);
+
+  // Start an explode/converge transition whenever `exploded` flips.
+  useEffect(() => {
+    explodedRef.current = exploded;
+    if (exploded) {
+      buildExplodeTargets(); // capture baselines + radial vectors on enable
+    }
+    transitionStartProgressRef.current = explodeProgressRef.current;
+    transitionTargetRef.current = exploded ? 1 : 0;
+    transitionStartTimeRef.current = performance.now();
+    if (explodeRafRef.current == null) {
+      explodeRafRef.current = requestAnimationFrame(explodeTick);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [exploded]);
+
+  // Reset explode when the model changes so a new model never starts exploded.
+  useEffect(() => {
+    setExploded(false);
+    explodedRef.current = false;
+    explodeProgressRef.current = 0;
+    explodeTargetsRef.current = [];
+    if (explodeRafRef.current != null) {
+      cancelAnimationFrame(explodeRafRef.current);
+      explodeRafRef.current = null;
+    }
+  }, [activeModelUrl]);
+
+  // On unmount, cancel the loop and restore baselines so the saved scene is
+  // never left in an exploded state.
+  useEffect(() => {
+    return () => {
+      if (explodeRafRef.current != null) cancelAnimationFrame(explodeRafRef.current);
+      restoreExplode();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Keep the rAF loop's amount ref current. When fully exploded and the loop is
+  // idle (transition already settled), re-apply once so the magnitude slider
+  // updates the spread live — without spinning up a continuous animation loop.
+  useEffect(() => {
+    explodeAmountRef.current = explodeAmount;
+    if (explodedRef.current && explodeRafRef.current == null) {
+      applyExplode(explodeProgressRef.current, explodeAmount);
+    }
+  }, [explodeAmount, applyExplode]);
 
   // ── Scene loading ──────────────────────────────────────────────────────────
 
@@ -1805,7 +1981,7 @@ export default function SegmentPage() {
           <ThreeViewport
             modelUrl={activeModelUrl ?? ''}
             showGrid={false}
-            transformMode={isOrganizing ? null : (lastClickedMeshId ? 'translate' : null)}
+            transformMode={(isOrganizing || exploded) ? null : (lastClickedMeshId ? 'translate' : null)}
             selectedObjectId={lastClickedMeshId ?? undefined}
             selectedObjectIds={highlightedMeshIds}
             onObjectSelect={handleObjectSelect}
