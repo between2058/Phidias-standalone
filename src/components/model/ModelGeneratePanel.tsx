@@ -16,6 +16,7 @@ import type {
 } from '@/lib/api/types';
 import { SingleImageUpload, BatchImageUpload } from '@/components/shared';
 import { usePhidiasStore } from '@/store/phidias-store';
+import { uploadImageToMcp, setMcpActiveImage, isMcpConfigured } from '@/lib/api/mcp';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Props
@@ -206,6 +207,34 @@ export default function ModelGeneratePanel({
       .catch((err) => console.error('Failed to load pending image', err))
       .finally(() => setPendingModelImage(null));
   }, [pendingModelImage, setPendingModelImage]);
+
+  // Mirror the model tab's single-image selection to the MCP server so
+  // tools like generate_3d can fall back to it when the agent omits a
+  // path ("這隻貓" / "the image I just uploaded"). Best-effort: failures
+  // log to the console but do not interrupt the UI flow.
+  useEffect(() => {
+    if (!isMcpConfigured()) return;
+    let cancelled = false;
+    if (!imageFile) {
+      setMcpActiveImage(null).catch((err) => {
+        console.warn('[mcp] clear active image failed:', err);
+      });
+      return;
+    }
+    (async () => {
+      try {
+        const upload = await uploadImageToMcp(imageFile);
+        if (cancelled) return;
+        await setMcpActiveImage(upload.asset_id);
+      } catch (err) {
+        if (cancelled) return;
+        console.warn('[mcp] sync active image failed:', err);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [imageFile]);
 
   // ── Multi-view mode ─────────────────────────────────────────────────────
   const [multiViewFiles, setMultiViewFiles] = useState<File[]>([]);
