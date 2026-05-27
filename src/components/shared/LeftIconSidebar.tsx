@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Camera, Sparkles, Scissors, Paintbrush, Atom } from 'lucide-react';
+import { Camera, Sparkles, Scissors, Paintbrush, Atom, DraftingCompass } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { usePhidiasStore } from '@/store/phidias-store';
 import NavActions from './NavActions';
@@ -23,6 +23,7 @@ const tabs: SidebarTab[] = [
   },
   { icon: <Paintbrush size={20} />, label: 'Texture', href: '/workspace/texture' },
   { icon: <Atom size={20} />, label: 'Physics', href: '/workspace/physics' },
+  { icon: <DraftingCompass size={20} />, label: 'CAD', href: '/workspace/cad' },
   //   { icon: <Hexagon size={20} />, label: 'Retopo', href: '/workspace/retopo' },
   //   { icon: <Clapperboard size={20} />, label: 'Scene', href: '/workspace/scene' },
   //   { icon: <Globe size={20} />, label: '3D World', href: '/workspace/world' },

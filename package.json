@@ -18,7 +18,8 @@
     "e2e": "playwright test --project=developer",
     "e2e:user": "playwright test --project=user-journeys",
     "e2e:all": "playwright test",
-    "e2e:ui": "playwright test --ui"
+    "e2e:ui": "playwright test --ui",
+    "dev:with-library": "concurrently -n phidias,sidecar -c blue,magenta \"pnpm dev\" \"cd ../../code/articraft && uv run uvicorn viewer.api.app:app --host 127.0.0.1 --port 8765\""
   },
   "dependencies": {
     "@pegaverse/phidias-sdk": "^1.0.0",
@@ -62,6 +63,11 @@
     "tailwindcss": "^3.4.1",
     "typescript": "^5",
     "vite": "^5.4.10",
+    "@testing-library/jest-dom": "^6.6.3",
+    "@testing-library/react": "^16.3.0",
+    "@testing-library/user-event": "^14.5.2",
+    "concurrently": "^9.1.2",
+    "jsdom": "^26.1.0",
     "vitest": "^1.6.1"
   }
 }

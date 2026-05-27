@@ -19,6 +19,10 @@ const nextConfig = {
         source: '/phidias/:path*',
         destination: '/api/phidias/:path*',
       },
+      {
+        source: '/api/library/:path*',
+        destination: `${process.env.ARTICRAFT_API_URL ?? 'http://127.0.0.1:8765'}/api/:path*`,
+      },
     ];
   },
 

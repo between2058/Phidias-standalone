@@ -116,12 +116,20 @@ export default defineConfig({
    */
   webServer: process.env.PLAYWRIGHT_NO_SERVER
     ? undefined
-    : {
-      command: 'npm run dev',
-      url: 'http://localhost:3000',
-      reuseExistingServer: true,
-      timeout: 60_000,
-      stdout: 'ignore',
-      stderr: 'pipe',
-    },
+    : [
+      {
+        command: 'pnpm dev',
+        url: 'http://localhost:3000',
+        reuseExistingServer: !process.env.CI,
+        timeout: 120_000,
+        stdout: 'ignore',
+        stderr: 'pipe',
+      },
+      {
+        command: 'cd ../../code/articraft && uv run uvicorn viewer.api.app:app --host 127.0.0.1 --port 8765',
+        url: 'http://127.0.0.1:8765/api/bootstrap',
+        reuseExistingServer: !process.env.CI,
+        timeout: 60_000,
+      },
+    ],
 });
